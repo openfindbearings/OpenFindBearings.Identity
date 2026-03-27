@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Data;
 using OpenIddict.Abstractions;
 using Quartz;
@@ -23,8 +22,15 @@ builder.Services.AddControllersWithViews();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Configure Entity Framework Core to use Microsoft SQL Server.
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+    // Configure Entity Framework Core
+    if (!builder.Environment.IsDevelopment())
+    {
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+    }
+    else
+    {
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+    }
 
     // Register the entity sets needed by OpenIddict.
     // Note: use the generic overload if you need to replace the default OpenIddict entities.
@@ -76,9 +82,13 @@ builder.Services.AddOpenIddict()
         else
         {
             // 生产环境加载真实证书 (从文件、KeyVault 或 K8s Secret)
-            //options
-            //      .AddSigningCertificate()
-            //      .AddEncryptionCertificate();
+            var certPassword = builder.Configuration["OpenIddict:certpwd"] ?? "111111";
+
+            var encryptionCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/encryption.pfx", certPassword);
+            var signingCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/signing.pfx", certPassword);
+
+            options.AddEncryptionCertificate(encryptionCert)
+                   .AddSigningCertificate(signingCert);
 
             // 【关键】在生产环境且位于反向代理后时，禁用传输安全强制检查
             // 因为内部通信是 HTTP，但外部是 HTTPS
