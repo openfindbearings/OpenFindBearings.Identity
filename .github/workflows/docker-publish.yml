@@ -1,0 +1,124 @@
+name: docker-publish
+
+on:
+  # 1. 发布 GitHub Release 时触发
+  release:
+    types: [published]
+
+  # 2. 手动触发（可自定义 tag）
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag (e.g., v1.2.3, staging, dev-20260104)'
+        required: true
+        default: 'latest'
+      reason:
+        description: 'Reason for manual publish'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      docker_tag: ${{ steps.set_tag.outputs.docker_tag }}
+      # 1. 新增输出：动态生成的镜像名
+      image_name: ${{ steps.set_image_name.outputs.image_name }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+
+      - name: Determine Docker tag
+        id: set_tag
+        run: |
+          case "${{ github.event_name }}" in
+            release)
+              TAG="${{ github.event.release.tag_name }}"
+              ;;
+            workflow_dispatch)
+              TAG="${{ github.event.inputs.tag }}"
+              ;;
+            *)
+              TAG="latest"
+              ;;
+          esac
+          echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Determine Image Name (Replace . with -)
+        id: set_image_name
+        run: |
+          # 获取仓库名 (例如: OpenFindBearings.Api)
+          REPO_NAME="${{ github.event.repository.name }}"
+          # 将点号 . 替换为连接符 - (例如: OpenFindBearings-Api)
+          IMAGE_NAME=$(echo "$REPO_NAME" | tr '.' '-')
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "Using image name: $IMAGE_NAME"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.12.0
+
+      - name: Build and export image as tar
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          file: ./src/OpenFindBearings.Identity/Dockerfile
+          tags: temp-image:${{ steps.set_tag.outputs.docker_tag }}
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: docker-image
+          path: /tmp/image.tar
+
+  # --- Push to Docker Hub ---
+  push-dockerhub:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7.0.0
+        with:
+          name: docker-image
+          path: /tmp
+      - run: docker load < /tmp/image.tar
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push to Docker Hub
+        run: |
+          TAG=${{ needs.build.outputs.docker_tag }}
+          # 2. 使用动态名称
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ needs.build.outputs.image_name }}:$TAG
+          docker tag temp-image:$TAG $IMAGE
+          docker push $IMAGE
+
+  # --- Push to GitHub GHCR ---
+  push-ghcr:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7.0.0
+        with:
+          name: docker-image
+          path: /tmp
+      - run: docker load < /tmp/image.tar
+      - name: Login to GHCR
+        uses: docker/login-action@v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push to GHCR
+        run: |
+          TAG=${{ needs.build.outputs.docker_tag }}
+          # 2. 使用动态名称
+          IMAGE=ghcr.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:$TAG
+          docker tag temp-image:$TAG $IMAGE
+          docker push $IMAGE
