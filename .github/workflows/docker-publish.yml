@@ -1,5 +1,9 @@
 name: docker-publish
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   # 1. 发布 GitHub Release 时触发
   release:
