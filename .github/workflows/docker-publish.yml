@@ -46,15 +46,17 @@ jobs:
           esac
           echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Determine Image Name (Replace . with -)
+      - name: Determine Image Name (Lowercase & Replace . with -)
         id: set_image_name
         run: |
-          # 获取仓库名 (例如: OpenFindBearings.Api)
-          REPO_NAME="${{ github.event.repository.name }}"
-          # 将点号 . 替换为连接符 - (例如: OpenFindBearings-Api)
-          IMAGE_NAME=$(echo "$REPO_NAME" | tr '.' '-')
-          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
-          echo "Using image name: $IMAGE_NAME"
+         # 1. 获取仓库名
+         REPO_NAME="${{ github.event.repository.name }}"
+         # 2. 先替换点号 . 为连接符 -
+         TEMP_NAME=$(echo "$REPO_NAME" | tr '.' '-')
+         # 3. 再将整个字符串转换为小写
+         IMAGE_NAME=$(echo "$TEMP_NAME" | tr '[:upper:]' '[:lower:]')
+         echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+         echo "Using image name: $IMAGE_NAME"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3.7.0
