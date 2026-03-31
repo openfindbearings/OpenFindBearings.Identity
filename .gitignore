@@ -416,3 +416,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/src/OpenFindBearings.Identity/identity.db
+/src/OpenFindBearings.Identity/identity.db-shm
+/src/OpenFindBearings.Identity/identity.db-wal
+deploy/k3s/secret.yml
+/src/OpenFindBearings.Identity/identity.db
+/src/OpenFindBearings.Identity/identity.db-shm
+/src/OpenFindBearings.Identity/identity.db-wal
