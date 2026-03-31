@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openfindbearings
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openfindbearings-identity-config
+  namespace: openfindbearings
+data:
+  openIddict__issuer: "https://auth.abcsxl.com"
+  Logging__LogLevel__Default: "Information"
+  Logging__LogLevel__Microsoft_AspNetCore: "Information"
+  Logging__LogLevel__Microsoft_EntityFrameworkCore: "Information"
+  AllowedHosts: "*"
+  AllowedOrigins__0: "https://www.simate.cn"
+  AllowedOrigins__1: "https://simate.cn"

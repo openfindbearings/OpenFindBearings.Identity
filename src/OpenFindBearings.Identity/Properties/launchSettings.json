@@ -1,17 +1,11 @@
 {
   "profiles": {
-    "http": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      },
-      "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5177"
-    },
     "https": {
       "commandName": "Project",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "POD_NETWORK_CIDR": "",
+        "SERVICE_NETWORK_CIDR": ""
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:7201;http://localhost:5177"
@@ -21,7 +15,9 @@
       "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
       "environmentVariables": {
         "ASPNETCORE_HTTPS_PORTS": "8081",
-        "ASPNETCORE_HTTP_PORTS": "8080"
+        "ASPNETCORE_HTTP_PORTS": "8080",
+        "POD_NETWORK_CIDR": "",
+        "SERVICE_NETWORK_CIDR": ""
       },
       "publishAllPorts": true,
       "useSSL": true
