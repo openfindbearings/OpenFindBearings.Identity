@@ -1,10 +1,12 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
-using OpenIddict.Abstractions;
+using OpenFindBearings.Identity.Shared.Extensions;
 using Quartz;
+using System.Net;
 using System.Security.Cryptography.X509Certificates;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,9 +15,44 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-    // 清除默认的已知网络限制，允许任何代理（在生产环境中建议限制为 K8s Pod 网段或 Ingress IP）
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
+    //// 清除默认的已知网络限制，允许任何代理（在生产环境中建议限制为 K8s Pod 网段或 Ingress IP）
+    //options.KnownIPNetworks.Clear();
+    //options.KnownProxies.Clear();
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        var podCidr = Environment.GetEnvironmentVariable("POD_NETWORK_CIDR");
+        if (!string.IsNullOrEmpty(podCidr))
+        {
+            try
+            {
+                var parts = podCidr.Split('/');
+                if (parts.Length == 2 &&
+                    IPAddress.TryParse(parts[0], out var ip) &&
+                    int.TryParse(parts[1], out var prefix))
+                {
+                    options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to parse CIDR: {ex.Message}");
+            }
+        }
+
+        // 可选：添加 Service 网络 CIDR
+        var serviceCidr = Environment.GetEnvironmentVariable("SERVICE_NETWORK_CIDR");
+        if (!string.IsNullOrEmpty(serviceCidr))
+        {
+            var parts = serviceCidr.Split('/');
+            if (parts.Length == 2 &&
+                IPAddress.TryParse(parts[0], out var ip) &&
+                int.TryParse(parts[1], out var prefix))
+            {
+                options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
+            }
+        }
+    }
 });
 
 builder.Services.AddControllersWithViews();
@@ -126,6 +163,12 @@ builder.Services.AddOpenIddict()
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// 添加CORS
+builder.Services.AddCorsService(builder.Configuration);
+
+// 添加健康检查
+builder.Services.AddHealthChecksService(builder.Configuration);
+
 var app = builder.Build();
 
 // 【必须】在 UseAuthentication 和 UseHttpsRedirection 之前启用转发头中间件
@@ -135,12 +178,14 @@ app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-
     app.UseDeveloperExceptionPage();
 }
 
 app.UseHttpsRedirection();
 app.UseRouting();
+
+// CORS
+app.UseCors("AllowSpecificOrigins");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -148,49 +193,19 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapDefaultControllerRoute();
 
+// 健康检查
+app.MapAllMapHealthChecks();
+
 // Before starting the host, create the database used to store the application data.
 //
 // Note: in a real world application, this step should be part of a setup script.
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await context.Database.EnsureCreatedAsync();
+    await context.Database.MigrateAsync();
 
-    var scopeManager = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
-
-    if (await scopeManager.FindByNameAsync("api:sync") is null)
-    {
-        await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
-        {
-            Name = "api:sync",
-            Resources =
-                        {
-                            "openfindbearings-api"
-                        }
-        });
-    }
-
-    var appManager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
-
-    if (await appManager.FindByClientIdAsync("sync-client") == null)
-    {
-        await appManager.CreateAsync(new OpenIddictApplicationDescriptor
-        {
-            ClientId = "sync-client",
-            ClientSecret = "388D45FA-B36B-4988-BA59-B187D329C207",
-            DisplayName = "sync client application",
-            Permissions =
-                        {
-                            Permissions.Endpoints.Token,
-                            Permissions.GrantTypes.ClientCredentials,
-                            Permissions.Scopes.Profile,
-                            Permissions.Scopes.Email,
-                            Permissions.Scopes.Roles,
-                            Permissions.Prefixes.Scope + "api:sync"
-                        }
-        });
-    }
+    // 填充种子数据
+    await SeedData.SeedAsync(scope.ServiceProvider);
 }
-
 
 await app.RunAsync();

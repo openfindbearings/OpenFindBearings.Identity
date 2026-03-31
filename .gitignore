@@ -423,3 +423,4 @@ deploy/k3s/secret.yml
 /src/OpenFindBearings.Identity/identity.db
 /src/OpenFindBearings.Identity/identity.db-shm
 /src/OpenFindBearings.Identity/identity.db-wal
+deploy/生成证书.txt
