@@ -7,7 +7,11 @@ namespace OpenFindBearings.Identity.Data
         public ApplicationDbContext(DbContextOptions options)
             : base(options) { }
 
-        protected override void OnModelCreating(ModelBuilder builder) { }
-    }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.UseOpenIddict();
 
+            base.OnModelCreating(modelBuilder);
+        }
+    }
 }
