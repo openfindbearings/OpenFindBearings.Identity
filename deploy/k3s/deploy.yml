@@ -36,6 +36,11 @@ spec:
         - configMapRef:
             name: openfindbearings-identity-config
         
+        volumeMounts:
+        - name: certs
+          mountPath: /app/certs
+          readOnly: true
+        
         livenessProbe:
           httpGet:
             path: /live
@@ -53,7 +58,12 @@ spec:
           periodSeconds: 5         # 每5秒探测一次
           timeoutSeconds: 3
           successThreshold: 1      # 成功1次即认为就绪
-          failureThreshold: 3     
+          failureThreshold: 3   
+
+      volumes: 
+      - name: certs
+        secret:
+          secretName: openiddict-certs
 
 ---
 apiVersion: v1

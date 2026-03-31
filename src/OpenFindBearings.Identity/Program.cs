@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Shared.Extensions;
 using Quartz;
+using Quartz.Logging;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
@@ -171,6 +172,9 @@ builder.Services.AddHealthChecksService(builder.Configuration);
 
 var app = builder.Build();
 
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+logger.LogInformation("启动 OpenFindBearings Identity");
+
 // 【必须】在 UseAuthentication 和 UseHttpsRedirection 之前启用转发头中间件
 app.UseForwardedHeaders();
 
@@ -199,13 +203,35 @@ app.MapAllMapHealthChecks();
 // Before starting the host, create the database used to store the application data.
 //
 // Note: in a real world application, this step should be part of a setup script.
-await using (var scope = app.Services.CreateAsyncScope())
+// ==========================================
+// 执行数据库迁移
+// ==========================================
+await using(var scope = app.Services.CreateAsyncScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await context.Database.MigrateAsync();
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
 
-    // 填充种子数据
-    await SeedData.SeedAsync(scope.ServiceProvider);
+        // 使用迁移，但处理异常
+        try
+        {
+            await context.Database.MigrateAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "迁移失败，尝试重新创建数据库");
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.MigrateAsync();
+        }
+
+        await SeedData.SeedAsync(services);
+        logger.LogInformation("数据库初始化成功");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "数据库初始化失败");
+    }
 }
 
 await app.RunAsync();
