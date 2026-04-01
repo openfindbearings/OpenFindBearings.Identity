@@ -5,9 +5,10 @@ metadata:
   namespace: openfindbearings
 data:
   openIddict__issuer: "https://auth.abcsxl.com"
-  Logging__LogLevel__Default: "Information"
-  Logging__LogLevel__Microsoft_AspNetCore: "Information"
-  Logging__LogLevel__Microsoft_EntityFrameworkCore: "Information"
+  Logging__LogLevel__Default: "Warning"
+  Logging__LogLevel__Microsoft_AspNetCore: "Warning"
+  Logging__LogLevel__Microsoft_EntityFrameworkCore: "Warning"
+  Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command: "Error"
   AllowedHosts: "*"
   AllowedOrigins__0: "https://www.simate.cn"
   AllowedOrigins__1: "https://simate.cn"

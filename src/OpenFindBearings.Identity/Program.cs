@@ -1,11 +1,8 @@
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Shared.Extensions;
 using Quartz;
-using Quartz.Logging;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
@@ -168,7 +165,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddCorsService(builder.Configuration);
 
 // 添加健康检查
-builder.Services.AddHealthChecksService(builder.Configuration);
+builder.Services.AddHealthChecksService();
 
 var app = builder.Build();
 

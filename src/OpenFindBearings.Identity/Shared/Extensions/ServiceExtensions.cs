@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+﻿using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenIddict.Abstractions;
+using System.Net;
 
 namespace OpenFindBearings.Identity.Shared.Extensions
 {
@@ -10,9 +11,7 @@ namespace OpenFindBearings.Identity.Shared.Extensions
     /// </summary>
     public static class ServiceExtensions
     {
-        public static IServiceCollection AddCorsService(
-            this IServiceCollection services,
-            IConfiguration configuration)
+        public static IServiceCollection AddCorsService(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddCors(options =>
             {
@@ -31,15 +30,13 @@ namespace OpenFindBearings.Identity.Shared.Extensions
             return services;
         }
 
-        public static IServiceCollection AddHealthChecksService(
-           this IServiceCollection services,
-           IConfiguration configuration)
+        public static IServiceCollection AddHealthChecksService(this IServiceCollection services)
         {
             services.AddHealthChecks()
-                // 1. 数据库检查（必须）
-                .AddDbContextCheck<ApplicationDbContext>(
-                    name: "database",
-                    failureStatus: HealthStatus.Unhealthy)
+                 // 1. 数据库检查（必须）
+                 .AddDbContextCheck<ApplicationDbContext>(
+                     name: "database",
+                     tags: ["db"])
 
                 // 2. OpenIddict 检查（必须）
                 .AddCheck<OpenIddictHealthCheck>(
@@ -54,64 +51,57 @@ namespace OpenFindBearings.Identity.Shared.Extensions
                 // 4. 磁盘空间检查（可选）
                 .AddCheck<DiskSpaceHealthCheck>(
                     name: "disk",
-                    failureStatus: HealthStatus.Unhealthy);
+                    failureStatus: HealthStatus.Degraded);
 
             return services;
         }
 
-        public static void MapAllMapHealthChecks(this IEndpointRouteBuilder app)
+        public static IServiceCollection ConfigureForwardedHeaders(this IServiceCollection services, bool isDevelopment)
         {
-            app.MapHealthChecks("/health", new HealthCheckOptions
+            services.Configure<ForwardedHeadersOptions>(options =>
             {
-                ResponseWriter = async (context, report) =>
+                // 所有环境都可以先打开
+                options.ForwardedHeaders =
+                    ForwardedHeaders.XForwardedFor |
+                    ForwardedHeaders.XForwardedProto;
+
+                // 但只在非开发环境信任网络
+                if (!isDevelopment)
                 {
-                    context.Response.ContentType = "application/json";
-                    var result = new
-                    {
-                        status = report.Status.ToString(),
-                        checks = report.Entries.Select(e => new
-                        {
-                            name = e.Key,
-                            status = e.Value.Status.ToString(),
-                            description = e.Value.Description
-                        }),
-                        duration = report.TotalDuration
-                    };
-                    await context.Response.WriteAsJsonAsync(result);
+                    AddKnownNetwork(options, "POD_NETWORK_CIDR");
+                    AddKnownNetwork(options, "SERVICE_NETWORK_CIDR");
+                }
+                else
+                {
+                    // 开发环境：不信任任何代理
+                    options.KnownProxies.Clear();
+                    options.KnownIPNetworks.Clear();
                 }
             });
 
-            // K8s 风格（简洁响应）
-            app.MapHealthChecks("/healthz", new HealthCheckOptions
+            return services;
+        }
+
+        private static void AddKnownNetwork(ForwardedHeadersOptions options, string envVarName)
+        {
+            var cidr = Environment.GetEnvironmentVariable(envVarName);
+            if (string.IsNullOrEmpty(cidr))
+                return;
+
+            try
             {
-                Predicate = _ => true,
-                ResponseWriter = async (context, report) =>
+                var parts = cidr.Split('/');
+                if (parts.Length == 2 &&
+                    IPAddress.TryParse(parts[0], out var ip) &&
+                    int.TryParse(parts[1], out var prefix))
                 {
-                    // 修改这里：只有 Unhealthy 才返回 503，Degraded 返回 200
-                    var statusCode = report.Status == HealthStatus.Unhealthy ? 503 : 200;
-                    context.Response.StatusCode = statusCode;
-
-                    await context.Response.WriteAsync(report.Status.ToString());
+                    options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
                 }
-            });
-
-            // --- A. 存活探针 (/live) ---
-            // 职责：只检查进程是否死锁。
-            // 策略：不执行任何注册的检查项 (Predicate = false)。
-            app.MapHealthChecks("/live", new HealthCheckOptions
+            }
+            catch (Exception ex)
             {
-                Predicate = _ => false
-            });
-
-            // --- B. 就绪探针 (/ready) ---
-            // 职责：检查是否准备好接收流量。
-            // 【修复点】：排除 "db" 标签的检查。
-            // 原因：在数据库迁移期间，数据库连接可能被占用。如果这里检查数据库，会导致就绪探针失败，
-            // 进而导致 K8s 认为服务未就绪甚至重启服务，导致迁移永远无法完成。
-            app.MapHealthChecks("/ready", new HealthCheckOptions
-            {
-                Predicate = check => !check.Tags.Contains("db")
-            });
+                Console.WriteLine($"Failed to parse CIDR ({envVarName}): {ex.Message}");
+            }
         }
     }
 
