@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Shared.Extensions;
-using Quartz;
-using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
 

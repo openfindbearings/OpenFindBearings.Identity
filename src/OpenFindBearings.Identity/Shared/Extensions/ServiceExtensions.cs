@@ -35,26 +35,27 @@ namespace OpenFindBearings.Identity.Shared.Extensions
 
         public static IServiceCollection AddHealthChecksService(this IServiceCollection services)
         {
-            services.AddHealthChecks()
-                 // 1. 数据库检查（必须）
-                 .AddDbContextCheck<ApplicationDbContext>(
-                     name: "database",
-                     tags: ["db"])
+            services.AddHealthChecks();
+            //services.AddHealthChecks()
+            //     // 1. 数据库检查（必须）
+            //     .AddDbContextCheck<ApplicationDbContext>(
+            //         name: "database",
+            //         tags: ["db"])
 
-                // 2. OpenIddict 检查（必须）
-                .AddCheck<OpenIddictHealthCheck>(
-                    name: "openiddict",
-                    failureStatus: HealthStatus.Unhealthy)
+            //    // 2. OpenIddict 检查（必须）
+            //    .AddCheck<OpenIddictHealthCheck>(
+            //        name: "openiddict",
+            //        failureStatus: HealthStatus.Unhealthy)
 
-                // 3. 内存检查（可选）
-                .AddCheck<MemoryHealthCheck>(
-                    name: "memory",
-                    failureStatus: HealthStatus.Degraded)  // Degraded 表示降级，不是完全不可用
+            //    // 3. 内存检查（可选）
+            //    .AddCheck<MemoryHealthCheck>(
+            //        name: "memory",
+            //        failureStatus: HealthStatus.Degraded)  // Degraded 表示降级，不是完全不可用
 
-                // 4. 磁盘空间检查（可选）
-                .AddCheck<DiskSpaceHealthCheck>(
-                    name: "disk",
-                    failureStatus: HealthStatus.Degraded);
+            //    // 4. 磁盘空间检查（可选）
+            //    .AddCheck<DiskSpaceHealthCheck>(
+            //        name: "disk",
+            //        failureStatus: HealthStatus.Degraded);
 
             return services;
         }
