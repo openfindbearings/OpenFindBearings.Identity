@@ -45,10 +45,7 @@ namespace OpenFindBearings.Identity.Data
                             Permissions.Prefixes.Scope + "api:sync"
                         }
                 });
-            }                
-
-            //var envName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            //var isDev = string.IsNullOrWhiteSpace(envName) || envName == "Development"; // 默认视为开发环境
+            } 
         }
     }
 }

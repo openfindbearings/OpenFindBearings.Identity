@@ -1,7 +1,11 @@
-﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+﻿using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenIddict.Abstractions;
+using Quartz;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 
 namespace OpenFindBearings.Identity.Shared.Extensions
 {
@@ -10,9 +14,7 @@ namespace OpenFindBearings.Identity.Shared.Extensions
     /// </summary>
     public static class ServiceExtensions
     {
-        public static IServiceCollection AddCorsService(
-            this IServiceCollection services,
-            IConfiguration configuration)
+        public static IServiceCollection AddCorsService(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddCors(options =>
             {
@@ -31,15 +33,13 @@ namespace OpenFindBearings.Identity.Shared.Extensions
             return services;
         }
 
-        public static IServiceCollection AddHealthChecksService(
-           this IServiceCollection services,
-           IConfiguration configuration)
+        public static IServiceCollection AddHealthChecksService(this IServiceCollection services)
         {
             services.AddHealthChecks()
-                // 1. 数据库检查（必须）
-                .AddDbContextCheck<ApplicationDbContext>(
-                    name: "database",
-                    failureStatus: HealthStatus.Unhealthy)
+                 // 1. 数据库检查（必须）
+                 .AddDbContextCheck<ApplicationDbContext>(
+                     name: "database",
+                     tags: ["db"])
 
                 // 2. OpenIddict 检查（必须）
                 .AddCheck<OpenIddictHealthCheck>(
@@ -54,67 +54,168 @@ namespace OpenFindBearings.Identity.Shared.Extensions
                 // 4. 磁盘空间检查（可选）
                 .AddCheck<DiskSpaceHealthCheck>(
                     name: "disk",
-                    failureStatus: HealthStatus.Unhealthy);
+                    failureStatus: HealthStatus.Degraded);
 
             return services;
         }
 
-        public static void MapAllMapHealthChecks(this IEndpointRouteBuilder app)
+        public static IServiceCollection ConfigureForwardedHeaders(this IServiceCollection services, bool isDevelopment)
         {
-            app.MapHealthChecks("/health", new HealthCheckOptions
+            services.Configure<ForwardedHeadersOptions>(options =>
             {
-                ResponseWriter = async (context, report) =>
+                // 所有环境都可以先打开
+                options.ForwardedHeaders =
+                    ForwardedHeaders.XForwardedFor |
+                    ForwardedHeaders.XForwardedProto;
+
+                // 但只在非开发环境信任网络
+                if (!isDevelopment)
                 {
-                    context.Response.ContentType = "application/json";
-                    var result = new
+                    AddKnownNetwork(options, "POD_NETWORK_CIDR");
+                    AddKnownNetwork(options, "SERVICE_NETWORK_CIDR");
+                }
+                else
+                {
+                    // 开发环境：不信任任何代理
+                    options.KnownProxies.Clear();
+                    options.KnownIPNetworks.Clear();
+                }
+            });
+
+            return services;
+        }
+
+        private static void AddKnownNetwork(ForwardedHeadersOptions options, string envVarName)
+        {
+            var cidr = Environment.GetEnvironmentVariable(envVarName);
+            if (string.IsNullOrEmpty(cidr))
+                return;
+
+            try
+            {
+                var parts = cidr.Split('/');
+                if (parts.Length == 2 &&
+                    IPAddress.TryParse(parts[0], out var ip) &&
+                    int.TryParse(parts[1], out var prefix))
+                {
+                    options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to parse CIDR ({envVarName}): {ex.Message}");
+            }
+        }
+
+        public static IServiceCollection AddOpenIddictService(this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
+        {
+            // DbContext
+            services.AddDbContext<ApplicationDbContext>(options =>
+            {
+                // Configure Entity Framework Core
+                if (!isDevelopment)
+                {
+                    options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+                }
+                else
+                {
+                    options.UseSqlite(configuration.GetConnectionString("DefaultConnection"));
+                }
+
+                // Register the entity sets needed by OpenIddict.
+                // Note: use the generic overload if you need to replace the default OpenIddict entities.
+                options.UseOpenIddict();
+            });
+
+            // OpenIddict offers native integration with Quartz.NET to perform scheduled tasks
+            // (like pruning orphaned authorizations/tokens from the database) at regular intervals.
+            services.AddQuartz(options =>
+            {
+                options.UseSimpleTypeLoader();
+                options.UseInMemoryStore();
+            });
+
+            // Register the Quartz.NET service and configure it to block shutdown until jobs are complete.
+            services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
+
+            services.AddOpenIddict()
+
+                // Register the OpenIddict core components.
+                .AddCore(options =>
+                {
+                    // Configure OpenIddict to use the Entity Framework Core stores and models.
+                    // Note: call ReplaceDefaultEntities() to replace the default OpenIddict entities.
+                    options.UseEntityFrameworkCore()
+                           .UseDbContext<ApplicationDbContext>();
+
+                    // Enable Quartz.NET integration.
+                    options.UseQuartz();
+                })
+
+                // Register the OpenIddict server components.
+                .AddServer(options =>
+                {
+                    // Enable the token endpoint.
+                    options.SetTokenEndpointUris("connect/token");
+
+                    options.AllowClientCredentialsFlow() // Enable the client credentials flow.
+                           .AllowRefreshTokenFlow();
+
+                    // Register the signing and encryption credentials.
+                    // 证书配置
+                    if (isDevelopment)
                     {
-                        status = report.Status.ToString(),
-                        checks = report.Entries.Select(e => new
-                        {
-                            name = e.Key,
-                            status = e.Value.Status.ToString(),
-                            description = e.Value.Description
-                        }),
-                        duration = report.TotalDuration
-                    };
-                    await context.Response.WriteAsJsonAsync(result);
-                }
-            });
+                        options
+                              .AddDevelopmentEncryptionCertificate()
+                              .AddDevelopmentSigningCertificate();
+                    }
+                    else
+                    {
+                        // 生产环境加载真实证书 (从文件、KeyVault 或 K8s Secret)
+                        var certPassword = configuration["OpenIddict:certpwd"] ?? "111111";
 
-            // K8s 风格（简洁响应）
-            app.MapHealthChecks("/healthz", new HealthCheckOptions
-            {
-                Predicate = _ => true,
-                ResponseWriter = async (context, report) =>
+                        var encryptionCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/encryption.pfx", certPassword);
+                        var signingCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/signing.pfx", certPassword);
+
+                        options.AddEncryptionCertificate(encryptionCert)
+                               .AddSigningCertificate(signingCert);
+
+                        // 【关键】在生产环境且位于反向代理后时，禁用传输安全强制检查
+                        // 因为内部通信是 HTTP，但外部是 HTTPS
+                        options.UseAspNetCore()
+                               .DisableTransportSecurityRequirement();
+                    }
+
+                    // 显式禁用访问令牌加密（因为不需要加密）
+                    options.DisableAccessTokenEncryption();
+
+                    // Note: setting a static issuer is mandatory when using mTLS aliases to ensure it not
+                    // dynamically computed based on the request URI, as this would result in two different
+                    // issuers being used (one pointing to the mTLS domain and one pointing to the regular one).
+                    options.SetIssuer(configuration["OpenIddict:Issuer"] ?? "https://localhost:7201");
+
+                    // 配置令牌的有效期
+                    options.SetAccessTokenLifetime(TimeSpan.FromHours(1))       // A. 访问令牌有效期
+                           .SetRefreshTokenLifetime(TimeSpan.FromDays(30));     // B. 刷新令牌绝对有效期
+
+                    // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
+                    options.UseAspNetCore()
+                           .EnableTokenEndpointPassthrough();
+                })
+
+                // Register the OpenIddict validation components.
+                .AddValidation(options =>
                 {
-                    // 修改这里：只有 Unhealthy 才返回 503，Degraded 返回 200
-                    var statusCode = report.Status == HealthStatus.Unhealthy ? 503 : 200;
-                    context.Response.StatusCode = statusCode;
+                    // Import the configuration from the local OpenIddict server instance.
+                    options.UseLocalServer();
 
-                    await context.Response.WriteAsync(report.Status.ToString());
-                }
-            });
+                    // Register the ASP.NET Core host.
+                    options.UseAspNetCore();
+                });
 
-            // --- A. 存活探针 (/live) ---
-            // 职责：只检查进程是否死锁。
-            // 策略：不执行任何注册的检查项 (Predicate = false)。
-            app.MapHealthChecks("/live", new HealthCheckOptions
-            {
-                Predicate = _ => false
-            });
-
-            // --- B. 就绪探针 (/ready) ---
-            // 职责：检查是否准备好接收流量。
-            // 【修复点】：排除 "db" 标签的检查。
-            // 原因：在数据库迁移期间，数据库连接可能被占用。如果这里检查数据库，会导致就绪探针失败，
-            // 进而导致 K8s 认为服务未就绪甚至重启服务，导致迁移永远无法完成。
-            app.MapHealthChecks("/ready", new HealthCheckOptions
-            {
-                Predicate = check => !check.Tags.Contains("db")
-            });
+            return services;
         }
     }
-
 
     // ============ 自定义健康检查类 ============
 
