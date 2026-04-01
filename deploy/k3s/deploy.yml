@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: openfindbearings-identity
-        image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.4
+        image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.5
         ports:
         - containerPort: 8080
 
