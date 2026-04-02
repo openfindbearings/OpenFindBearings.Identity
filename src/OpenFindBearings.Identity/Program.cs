@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data;
-using OpenFindBearings.Identity.Shared.Extensions;
+using OpenFindBearings.Identity.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +56,6 @@ app.MapAllMapHealthChecks();
 // Note: in a real world application, this step should be part of a setup script.
 // ==========================================
 // 执行数据库初始化
-// TODO: 支持--init参数通过InitContainer实现单独的初始化工作
 // ==========================================
 await InitializeDatabaseAsync(app);
 
@@ -70,20 +69,9 @@ static async Task InitializeDatabaseAsync(WebApplication app)
 
     try
     {
-        // 使用迁移，但处理异常
-        try
-        {
-            await context.Database.MigrateAsync();
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogWarning(ex, "迁移失败");
-            //app.Logger.LogWarning(ex, "迁移失败，尝试重新创建数据库");
-            //await context.Database.EnsureDeletedAsync();
-            //await context.Database.MigrateAsync();
-        }
-
+        await context.Database.MigrateAsync();
         await SeedData.SeedAsync(services);
+
         app.Logger.LogInformation("数据库初始化成功");
     }
     catch (Exception ex)
