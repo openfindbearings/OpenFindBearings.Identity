@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace OpenFindBearings.Identity.Shared.Extensions
+namespace OpenFindBearings.Identity.Extensions
 {
     public static class EndpointRouteBuilderExtensions
     {
@@ -52,12 +52,12 @@ namespace OpenFindBearings.Identity.Shared.Extensions
 
             // --- B. 就绪探针 (/ready) ---
             // 职责：检查是否准备好接收流量。
-            // 【修复点】：排除 "db" 标签的检查。
+            // 【修复点】：排除 "startup" 标签的检查。
             // 原因：在数据库迁移期间，数据库连接可能被占用。如果这里检查数据库，会导致就绪探针失败，
             // 进而导致 K8s 认为服务未就绪甚至重启服务，导致迁移永远无法完成。
             app.MapHealthChecks("/ready", new HealthCheckOptions
             {
-                Predicate = check => !check.Tags.Contains("db")
+                Predicate = check => !check.Tags.Contains("startup")
             });
         }
     }

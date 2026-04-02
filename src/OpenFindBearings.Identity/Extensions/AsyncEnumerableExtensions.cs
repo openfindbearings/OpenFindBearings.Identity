@@ -1,4 +1,4 @@
-﻿namespace OpenFindBearings.Identity.Shared.Extensions
+﻿namespace OpenFindBearings.Identity.Extensions
 {
     public static class AsyncEnumerableExtensions
     {

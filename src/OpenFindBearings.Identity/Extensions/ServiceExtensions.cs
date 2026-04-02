@@ -7,7 +7,7 @@ using Quartz;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
-namespace OpenFindBearings.Identity.Shared.Extensions
+namespace OpenFindBearings.Identity.Extensions
 {
     /// <summary>
     /// 服务注册扩展方法
@@ -40,13 +40,13 @@ namespace OpenFindBearings.Identity.Shared.Extensions
                  // 1. 数据库检查（必须）
                  .AddDbContextCheck<ApplicationDbContext>(
                      name: "database",
-                     tags: ["db"])
+                     tags: ["startup"])
 
                 // 2. OpenIddict 检查（必须）
                 .AddCheck<OpenIddictHealthCheck>(
                      name: "openiddict",
                      failureStatus: HealthStatus.Unhealthy,
-                     tags: ["db"])
+                     tags: ["startup"])
 
                 // 3. 内存检查（可选）
                 .AddCheck<MemoryHealthCheck>(
@@ -115,14 +115,7 @@ namespace OpenFindBearings.Identity.Shared.Extensions
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 // Configure Entity Framework Core
-                if (!isDevelopment)
-                {
-                    options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
-                }
-                else
-                {
-                    options.UseSqlite(configuration.GetConnectionString("DefaultConnection"));
-                }
+                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 
                 // Register the entity sets needed by OpenIddict.
                 // Note: use the generic overload if you need to replace the default OpenIddict entities.
