@@ -129,7 +129,7 @@ jobs:
           docker tag temp-image:$TAG $IMAGE
           docker push $IMAGE
 
-  # --- Deploy to K3s via SSH ---
+  # --- Deploy to K3s via Remote API ---
   deploy:
     needs: [build, push-ghcr]
     runs-on: ubuntu-latest
@@ -138,99 +138,108 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.skip_deploy != 'true')
     
     steps:
-      - name: Deploy to K3s via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.TENCENT_SERVER_IP }}
-          username: ${{ secrets.TENCENT_SSH_USERNAME }}
-          key: ${{ secrets.TENCENT_SSH_PRIVATE_KEY }}
-          script_stop: true
-          script: |
-            set -e
-            
-            # 固定配置 - 直接硬编码
-            NAMESPACE="openfindbearings"
-            DEPLOYMENT="openfindbearings-identity-deployment"
-            CONTAINER="openfindbearings-identity"
-            
-            # 镜像信息 - 使用 GHCR
-            IMAGE="ghcr.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.docker_tag }}"
-            
-            echo "========================================="
-            echo "开始部署到 K3s"
-            echo "部署时间: $(date)"
-            echo "========================================="
-            echo "命名空间: $NAMESPACE"
-            echo "Deployment: $DEPLOYMENT"
-            echo "容器名称: $CONTAINER"
-            echo "镜像地址: $IMAGE"
-            echo "========================================="
-            
-            # 检查命名空间是否存在
-            if ! sudo kubectl get namespace $NAMESPACE &> /dev/null; then
-              echo "错误: 命名空间 $NAMESPACE 不存在"
-              exit 1
-            fi
-            
-            # 检查 deployment 是否存在
-            if ! sudo kubectl get deployment $DEPLOYMENT -n $NAMESPACE &> /dev/null; then
-              echo "错误: deployment $DEPLOYMENT 在命名空间 $NAMESPACE 中不存在"
-              echo "可用的 deployments:"
-              sudo kubectl get deployments -n $NAMESPACE
-              exit 1
-            fi
-            
-            # 保存当前镜像以便回滚
-            CURRENT_IMAGE=$(sudo kubectl get deployment $DEPLOYMENT \
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          kubectl version --client
+      
+      - name: Configure kubeconfig
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_CONTENT }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_CONTENT" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          # 验证连接
+          kubectl cluster-info
+          kubectl get nodes
+      
+      - name: Deploy to K3s
+        env:
+          NAMESPACE: "openfindbearings"
+          DEPLOYMENT: "openfindbearings-identity-deployment"
+          CONTAINER: "openfindbearings-identity"
+          IMAGE: "ghcr.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.docker_tag }}"
+        run: |
+          set -e
+          
+          echo "========================================="
+          echo "开始部署到 K3s"
+          echo "部署时间: $(date)"
+          echo "========================================="
+          echo "命名空间: $NAMESPACE"
+          echo "Deployment: $DEPLOYMENT"
+          echo "容器名称: $CONTAINER"
+          echo "镜像地址: $IMAGE"
+          echo "========================================="
+          
+          # 检查命名空间是否存在
+          if ! kubectl get namespace $NAMESPACE &> /dev/null; then
+            echo "错误: 命名空间 $NAMESPACE 不存在"
+            exit 1
+          fi
+          
+          # 检查 deployment 是否存在
+          if ! kubectl get deployment $DEPLOYMENT -n $NAMESPACE &> /dev/null; then
+            echo "错误: deployment $DEPLOYMENT 在命名空间 $NAMESPACE 中不存在"
+            echo "可用的 deployments:"
+            kubectl get deployments -n $NAMESPACE
+            exit 1
+          fi
+          
+          # 保存当前镜像以便回滚
+          CURRENT_IMAGE=$(kubectl get deployment $DEPLOYMENT \
+            -n $NAMESPACE \
+            -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}")
+          
+          echo "当前镜像: $CURRENT_IMAGE"
+          echo "新镜像: $IMAGE"
+          echo ""
+          
+          # 更新镜像
+          echo "正在更新 deployment 镜像..."
+          kubectl set image deployment/$DEPLOYMENT \
+            $CONTAINER=$IMAGE \
+            -n $NAMESPACE \
+            --record
+          
+          # 等待部署完成
+          echo "等待 rollout 完成（超时时间: 5分钟）..."
+          if ! kubectl rollout status deployment/$DEPLOYMENT \
+            -n $NAMESPACE \
+            --timeout=5m; then
+            echo ""
+            echo "❌ 部署失败，正在回滚..."
+            kubectl rollout undo deployment/$DEPLOYMENT \
+              -n $NAMESPACE
+            echo "回滚完成"
+            echo "当前镜像已恢复为:"
+            kubectl get deployment $DEPLOYMENT \
               -n $NAMESPACE \
-              -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}")
-            
-            echo "当前镜像: $CURRENT_IMAGE"
-            echo "新镜像: $IMAGE"
+              -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}"
             echo ""
-            
-            # 更新镜像
-            echo "正在更新 deployment 镜像..."
-            sudo kubectl set image deployment/$DEPLOYMENT \
-              $CONTAINER=$IMAGE \
-              -n $NAMESPACE \
-              --record
-            
-            # 等待部署完成
-            echo "等待 rollout 完成（超时时间: 5分钟）..."
-            if ! sudo kubectl rollout status deployment/$DEPLOYMENT \
-              -n $NAMESPACE \
-              --timeout=5m; then
-              echo ""
-              echo "❌ 部署失败，正在回滚..."
-              sudo kubectl rollout undo deployment/$DEPLOYMENT \
-                -n $NAMESPACE
-              echo "回滚完成"
-              echo "当前镜像已恢复为:"
-              sudo kubectl get deployment $DEPLOYMENT \
-                -n $NAMESPACE \
-                -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}"
-              echo ""
-              exit 1
-            fi
-            
-            # 验证部署
-            echo ""
-            echo "========================================="
-            echo "✅ 部署成功！"
-            echo "========================================="
-            echo ""
-            echo "Deployment 状态:"
-            sudo kubectl get deployment $DEPLOYMENT -n $NAMESPACE
-            echo ""
-            echo "Pods 状态:"
-            sudo kubectl get pods -n $NAMESPACE -l app=openfindbearings-identity
-            echo ""
-            echo "最近的 Pods:"
-            sudo kubectl get pods -n $NAMESPACE --sort-by='.metadata.creationTimestamp' | tail -5
-            echo ""
-            echo "最近事件:"
-            sudo kubectl get events -n $NAMESPACE --sort-by='.lastTimestamp' | tail -10
-            
-            echo ""
-            echo "部署完成时间: $(date)"
+            exit 1
+          fi
+          
+          # 验证部署
+          echo ""
+          echo "========================================="
+          echo "✅ 部署成功！"
+          echo "========================================="
+          echo ""
+          echo "Deployment 状态:"
+          kubectl get deployment $DEPLOYMENT -n $NAMESPACE
+          echo ""
+          echo "Pods 状态:"
+          kubectl get pods -n $NAMESPACE -l app=openfindbearings-identity
+          echo ""
+          echo "最近的 Pods:"
+          kubectl get pods -n $NAMESPACE --sort-by='.metadata.creationTimestamp' | tail -5
+          echo ""
+          echo "最近事件:"
+          kubectl get events -n $NAMESPACE --sort-by='.lastTimestamp' | tail -10
+          
+          echo ""
+          echo "部署完成时间: $(date)"
