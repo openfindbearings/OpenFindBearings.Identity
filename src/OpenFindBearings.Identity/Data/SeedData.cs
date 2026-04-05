@@ -39,6 +39,7 @@ namespace OpenFindBearings.Identity.Data
                         {
                             Permissions.Endpoints.Token,
                             Permissions.GrantTypes.ClientCredentials,
+                            Permissions.GrantTypes.RefreshToken,
                             Permissions.Scopes.Profile,
                             Permissions.Scopes.Email,
                             Permissions.Scopes.Roles,
