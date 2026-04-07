@@ -1,34 +1,75 @@
+﻿using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// 配置 Forwarded Headers 选项
+builder.Services.ConfigureForwardedHeaders(builder.Environment.IsDevelopment());
+
+// MVC
 builder.Services.AddControllersWithViews();
+
+// OpenIddict
+builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());
+
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+// 添加CORS
+builder.Services.AddCorsService(builder.Configuration);
+
+// 添加健康检查
+builder.Services.AddHealthChecksService();
 
 var app = builder.Build();
 
+app.Logger.LogInformation("启动 OpenFindBearings Identity");
+
+// 1. 处理代理头，启用转发头中间件
+app.UseForwardedHeaders();
+
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.UseDeveloperExceptionPage();
+}
+else
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+
+    // 2. HSTS（可选）
+    //app.UseHsts();              
 }
 
+// 3. HTTPS 重定向
 app.UseHttpsRedirection();
+
+// 4. 路由
 app.UseRouting();
 
+// 5. CORS
+app.UseCors("AllowSpecificOrigins");
+
+// 6. 认证
+app.UseAuthentication();
+// 7. 授权
 app.UseAuthorization();
 
+// 8. 静态文件
 app.MapStaticAssets();
 
-app.MapControllerRoute(
-    name: "areas",
-    pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+// 9. 端点映射
+app.MapControllers();
+app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
+app.MapDefaultControllerRoute().WithStaticAssets();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+// 10. 健康检查
+app.MapAllHealthChecks();
 
+// 11. 执行数据库初始化
+using var scope = app.Services.CreateScope();
+await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
 
+// 12. 启动
 app.Run();
