@@ -12,7 +12,7 @@ using OpenFindBearings.Identity.Data;
 namespace OpenFindBearings.Identity.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260407071815_InitialCreate")]
+    [Migration("20260408094422_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -25,13 +25,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.SmsVerificationCode", b =>
+            modelBuilder.Entity("OpenFindBearings.Identity.Models.Entities.SmsVerificationCode", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
@@ -81,11 +80,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.ToTable("SmsVerificationCodes", (string)null);
                 });
 
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.User", b =>
+            modelBuilder.Entity("OpenFindBearings.Identity.Models.Entities.User", b =>
                 {
-                    b.Property<string>("Sub")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
@@ -99,6 +99,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.Property<string>("CustomClaims")
                         .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
                         .HasMaxLength(255)
@@ -118,6 +121,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.Property<string>("GivenName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
@@ -143,10 +149,6 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("MiddleName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Name")
                         .HasMaxLength(255)
@@ -179,6 +181,11 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("Sub")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -194,7 +201,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.HasKey("Sub");
+                    b.HasKey("Id");
 
                     b.HasIndex("Email")
                         .IsUnique()
@@ -206,6 +213,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"PhoneNumber\" IS NOT NULL");
 
+                    b.HasIndex("Sub")
+                        .IsUnique();
+
                     b.HasIndex("Username")
                         .IsUnique()
                         .HasFilter("\"Username\" IS NOT NULL");
@@ -215,13 +225,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.UserLoginBinding", b =>
+            modelBuilder.Entity("OpenFindBearings.Identity.Models.Entities.UserLoginBinding", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTimeOffset>("BindTime")
                         .HasColumnType("timestamp with time zone");
@@ -258,10 +267,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
+                    b.Property<Guid>("UserId")
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -278,13 +286,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.ToTable("UserLoginBindings", (string)null);
                 });
 
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.UserLoginLog", b =>
+            modelBuilder.Entity("OpenFindBearings.Identity.Models.Entities.UserLoginLog", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("ClientId")
                         .HasMaxLength(100)
@@ -325,10 +332,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
+                    b.Property<Guid>("UserId")
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -557,31 +563,26 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.ToTable("OpenIddictTokens", (string)null);
                 });
 
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.User", b =>
+            modelBuilder.Entity("OpenFindBearings.Identity.Models.Entities.User", b =>
                 {
-                    b.OwnsOne("OpenFindBearings.Identity.Data.Entities.Address", "Address", b1 =>
+                    b.OwnsOne("OpenFindBearings.Identity.Models.Entities.Address", "Address", b1 =>
                         {
-                            b1.Property<string>("UserSub");
+                            b1.Property<Guid>("UserId")
+                                .ValueGeneratedOnAdd();
 
-                            b1.Property<string>("Country")
-                                .HasMaxLength(100);
+                            b1.Property<string>("Country");
 
-                            b1.Property<string>("Formatted")
-                                .HasMaxLength(500);
+                            b1.Property<string>("Formatted");
 
-                            b1.Property<string>("Locality")
-                                .HasMaxLength(100);
+                            b1.Property<string>("Locality");
 
-                            b1.Property<string>("PostalCode")
-                                .HasMaxLength(20);
+                            b1.Property<string>("PostalCode");
 
-                            b1.Property<string>("Region")
-                                .HasMaxLength(100);
+                            b1.Property<string>("Region");
 
-                            b1.Property<string>("StreetAddress")
-                                .HasMaxLength(200);
+                            b1.Property<string>("StreetAddress");
 
-                            b1.HasKey("UserSub");
+                            b1.HasKey("UserId");
 
                             b1.ToTable("Users");
 
@@ -590,32 +591,10 @@ namespace OpenFindBearings.Identity.Data.Migrations
                                 .HasColumnType("jsonb");
 
                             b1.WithOwner()
-                                .HasForeignKey("UserSub");
+                                .HasForeignKey("UserId");
                         });
 
                     b.Navigation("Address");
-                });
-
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.UserLoginBinding", b =>
-                {
-                    b.HasOne("OpenFindBearings.Identity.Data.Entities.User", "User")
-                        .WithMany("LoginBindings")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.UserLoginLog", b =>
-                {
-                    b.HasOne("OpenFindBearings.Identity.Data.Entities.User", "User")
-                        .WithMany("LoginLogs")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", b =>
@@ -640,13 +619,6 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Authorization");
-                });
-
-            modelBuilder.Entity("OpenFindBearings.Identity.Data.Entities.User", b =>
-                {
-                    b.Navigation("LoginBindings");
-
-                    b.Navigation("LoginLogs");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>

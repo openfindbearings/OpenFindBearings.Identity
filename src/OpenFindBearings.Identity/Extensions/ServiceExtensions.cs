@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Data.Repositories;
 using OpenIddict.Abstractions;
 using Quartz;
 using System.Net;
@@ -40,6 +41,9 @@ namespace OpenFindBearings.Identity.Extensions
 
             // Register the Quartz.NET service and configure it to block shutdown until jobs are complete.
             services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
+
+            // Register repositories
+            AddRepositoryServices(services);
 
             services.AddOpenIddict()
 
@@ -228,6 +232,19 @@ namespace OpenFindBearings.Identity.Extensions
             {
                 Console.WriteLine($"Failed to parse CIDR ({envVarName}): {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 注册所有仓储服务
+        /// </summary>
+        private static void AddRepositoryServices(IServiceCollection services)
+        {
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<ISmsVerificationCodeRepository, SmsVerificationCodeRepository>();
+            services.AddScoped<IUserLoginBindingRepository, UserLoginBindingRepository>();
+            services.AddScoped<IUserLoginLogRepository, UserLoginLogRepository>();
+            services.AddScoped<IClientRepository, ClientRepository>();
+            services.AddScoped<IScopeRepository, ScopeRepository>();
         }
     }
 

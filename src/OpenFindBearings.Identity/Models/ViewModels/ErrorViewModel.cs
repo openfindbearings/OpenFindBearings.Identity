@@ -1,4 +1,4 @@
-namespace OpenFindBearings.Identity.Models;
+namespace OpenFindBearings.Identity.Models.ViewModels;
 
 public class ErrorViewModel
 {

@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using OpenFindBearings.Identity.Models;
+using OpenFindBearings.Identity.Models.ViewModels;
+using System.Diagnostics;
 
 namespace OpenFindBearings.Identity.Controllers;
 

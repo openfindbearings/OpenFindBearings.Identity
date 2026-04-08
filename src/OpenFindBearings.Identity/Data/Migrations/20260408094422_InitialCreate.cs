@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -61,8 +60,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "SmsVerificationCodes",
                 columns: table => new
                 {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     PhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
                     Type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "login"),
@@ -78,44 +76,89 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "UserLoginBindings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    UserId = table.Column<Guid>(type: "uuid", maxLength: 255, nullable: false),
+                    Provider = table.Column<int>(type: "integer", nullable: false),
+                    ProviderUserId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    UnionId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    ProviderNickname = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ProviderAvatarUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    RawData = table.Column<string>(type: "jsonb", nullable: true),
+                    BindTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    LastUsedTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsUnbound = table.Column<bool>(type: "boolean", nullable: false),
+                    UnbindTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserLoginBindings", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserLoginLogs",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    UserId = table.Column<Guid>(type: "uuid", maxLength: 255, nullable: false),
+                    LoginType = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "success"),
+                    FailureReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ClientId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    IpAddress = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    UserAgent = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    DeviceType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    DeviceId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserLoginLogs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     Sub = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    Issuer = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Username = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    PasswordHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    EmailVerified = table.Column<bool>(type: "boolean", nullable: false),
                     PhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    PasswordHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    EmailVerified = table.Column<bool>(type: "boolean", nullable: false),
                     PhoneNumberVerified = table.Column<bool>(type: "boolean", nullable: false),
                     Name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     GivenName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     FamilyName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    MiddleName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     Nickname = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     PreferredUsername = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     ProfileUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     PictureUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     WebsiteUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Gender = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     Birthdate = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
                     Locale = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     ZoneInfo = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Issuer = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     LockoutEnd = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     AccessFailedCount = table.Column<int>(type: "integer", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     LastLoginAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     LastLoginIp = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
                     LastLoginDevice = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CustomClaims = table.Column<string>(type: "jsonb", nullable: true),
                     Address = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.Sub);
+                    table.PrimaryKey("PK_Users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -140,63 +183,6 @@ namespace OpenFindBearings.Identity.Data.Migrations
                         column: x => x.ApplicationId,
                         principalTable: "OpenIddictApplications",
                         principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserLoginBindings",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    Provider = table.Column<int>(type: "integer", nullable: false),
-                    ProviderUserId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    UnionId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    ProviderNickname = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    ProviderAvatarUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    RawData = table.Column<string>(type: "jsonb", nullable: true),
-                    BindTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    LastUsedTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    IsUnbound = table.Column<bool>(type: "boolean", nullable: false),
-                    UnbindTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserLoginBindings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserLoginBindings_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "Sub",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserLoginLogs",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    LoginType = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "success"),
-                    FailureReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    ClientId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    IpAddress = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
-                    UserAgent = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DeviceType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    DeviceId = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserLoginLogs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserLoginLogs_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "Sub",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -372,6 +358,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 filter: "\"PhoneNumber\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Users_Sub",
+                table: "Users",
+                column: "Sub",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Username",
                 table: "Users",
                 column: "Username",
@@ -398,10 +390,10 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "UserLoginLogs");
 
             migrationBuilder.DropTable(
-                name: "OpenIddictAuthorizations");
+                name: "Users");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "OpenIddictAuthorizations");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictApplications");
