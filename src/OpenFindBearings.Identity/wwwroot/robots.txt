@@ -1,0 +1,12 @@
+User-agent: Googlebot
+User-agent: Googlebot-Image
+User-agent: Googlebot-Mobile
+Disallow:
+
+User-agent: Baiduspider
+User-agent: Baiduspider-image
+User-agent: Baiduspider-news
+Disallow:
+
+User-agent: *
+Disallow: /

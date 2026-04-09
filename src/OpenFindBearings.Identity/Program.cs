@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using OpenFindBearings.Identity.Data;
+﻿using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +11,9 @@ builder.Services.AddControllersWithViews();
 
 // OpenIddict
 builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());
+
+// 添加服务
+builder.Services.AddApplicationServices();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -26,56 +28,49 @@ var app = builder.Build();
 
 app.Logger.LogInformation("启动 OpenFindBearings Identity");
 
-// 【必须】在 UseAuthentication 和 UseHttpsRedirection 之前启用转发头中间件
+// 1. 处理代理头，启用转发头中间件
 app.UseForwardedHeaders();
 
-// Configure the HTTP request pipeline.
+// 2. 配置错误页面及其他开发环境专有设置
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.UseDeveloperExceptionPage();
 }
+else
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();    // HSTS（可选）           
+}
 
+// 3. HTTPS 重定向
 app.UseHttpsRedirection();
+
+// 4. 路由
 app.UseRouting();
 
-// CORS
+// 5. CORS
 app.UseCors("AllowSpecificOrigins");
 
+// 6. 认证
 app.UseAuthentication();
+// 7. 授权
 app.UseAuthorization();
 
+// 8. 静态文件
+app.MapStaticAssets();
+
+// 9. 端点映射
 app.MapControllers();
-app.MapDefaultControllerRoute();
+app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
+app.MapDefaultControllerRoute().WithStaticAssets();
 
-// 健康检查
-app.MapAllMapHealthChecks();
+// 10. 健康检查
+app.MapAllHealthChecks();
 
-// Before starting the host, create the database used to store the application data.
-//
-// Note: in a real world application, this step should be part of a setup script.
-// ==========================================
-// 执行数据库初始化
-// ==========================================
-await InitializeDatabaseAsync(app);
+// 11. 执行数据库初始化
+using var scope = app.Services.CreateScope();
+await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
 
-await app.RunAsync();
-
-static async Task InitializeDatabaseAsync(WebApplication app)
-{
-    using var scope = app.Services.CreateScope();
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<ApplicationDbContext>();
-
-    try
-    {
-        await context.Database.MigrateAsync();
-        await SeedData.SeedAsync(services);
-
-        app.Logger.LogInformation("数据库初始化成功");
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "数据库初始化失败");
-    }
-}
+// 12. 启动
+app.Run();

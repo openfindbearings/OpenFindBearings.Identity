@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Data.Repositories;
 using OpenIddict.Abstractions;
 using Quartz;
 using System.Net;
@@ -15,13 +16,18 @@ namespace OpenFindBearings.Identity.Extensions
     /// </summary>
     public static class ServiceExtensions
     {
+        /// <summary>
+        /// 添加OpenIddict
+        /// </summary>
         public static IServiceCollection AddOpenIddictService(this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
         {
             // DbContext
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 // Configure Entity Framework Core
-                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection") ?? 
+                    throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."),
+                    b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
 
                 // Register the entity sets needed by OpenIddict.
                 // Note: use the generic overload if you need to replace the default OpenIddict entities.
@@ -58,15 +64,14 @@ namespace OpenFindBearings.Identity.Extensions
                 {
                     // Enable the token endpoint.
                     options.SetTokenEndpointUris("connect/token")
-                           //.SetUserInfoEndpointUris("connect/userinfo")
-                           //.SetEndSessionEndpointUris("connect/logout")
-                           //.SetRevocationEndpointUris("/connect/revocation")
+                           .SetUserInfoEndpointUris("connect/userinfo")
+                           .SetEndSessionEndpointUris("connect/logout")
+                           .SetRevocationEndpointUris("/connect/revocation")
                            ;
 
                     options.AllowClientCredentialsFlow() // Enable the client credentials flow.
-                           //.AllowPasswordFlow()
-                           //.AllowCustomFlow("phone_code")
-                           //.AllowCustomFlow("phone")
+                           .AllowPasswordFlow()
+                           //.AllowCustomFlow("sms")
                            //.AllowCustomFlow("wechat")
                            //.AllowCustomFlow("alipay")
                            .AllowRefreshTokenFlow();
@@ -129,7 +134,22 @@ namespace OpenFindBearings.Identity.Extensions
         }
 
         /// <summary>
-        /// 跨域
+        /// 添加应用自定义服务
+        /// </summary>
+        public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+        {
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<ISmsVerificationCodeRepository, SmsVerificationCodeRepository>();
+            services.AddScoped<IUserLoginBindingRepository, UserLoginBindingRepository>();
+            services.AddScoped<IUserLoginLogRepository, UserLoginLogRepository>();
+            services.AddScoped<IClientRepository, ClientRepository>();
+            services.AddScoped<IScopeRepository, ScopeRepository>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// 添加跨域
         /// </summary>
         public static IServiceCollection AddCorsService(this IServiceCollection services, IConfiguration configuration)
         {
@@ -151,7 +171,7 @@ namespace OpenFindBearings.Identity.Extensions
         }
 
         /// <summary>
-        /// 健康检查
+        /// 添加健康检查
         /// </summary>
         public static IServiceCollection AddHealthChecksService(this IServiceCollection services)
         {
@@ -181,6 +201,9 @@ namespace OpenFindBearings.Identity.Extensions
             return services;
         }
 
+        /// <summary>
+        /// 配置转发头
+        /// </summary>
         public static IServiceCollection ConfigureForwardedHeaders(this IServiceCollection services, bool isDevelopment)
         {
             services.Configure<ForwardedHeadersOptions>(options =>

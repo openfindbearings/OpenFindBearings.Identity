@@ -5,7 +5,7 @@ namespace OpenFindBearings.Identity.Extensions
 {
     public static class EndpointRouteBuilderExtensions
     {
-        public static void MapAllMapHealthChecks(this IEndpointRouteBuilder app)
+        public static void MapAllHealthChecks(this IEndpointRouteBuilder app)
         {
             // 传统风格（友好响应）
             app.MapHealthChecks("/health", new HealthCheckOptions
