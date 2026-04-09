@@ -186,7 +186,7 @@ jobs:
           NAMESPACE: "openfindbearings"
           DEPLOYMENT: "openfindbearings-identity-deployment"
           CONTAINER: "openfindbearings-identity"
-          IMAGE: "ghcr.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.docker_tag }}"
+          IMAGE: "quay.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.docker_tag }}"
         run: |
           set -e
           
