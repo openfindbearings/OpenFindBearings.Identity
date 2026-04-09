@@ -1,6 +1,6 @@
 ﻿namespace OpenFindBearings.Identity.Constants
 {
-    public static class DeviceTypes
+    public static class DeviceTypeConstants
     {
         public const string IOS = "ios";
         public const string Android = "android";

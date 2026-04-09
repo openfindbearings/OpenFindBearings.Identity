@@ -388,5 +388,23 @@ namespace OpenFindBearings.Identity.Models.Entities
                 LastLoginDevice = LastLoginDevice
             };
         }
+
+        /// <summary>
+        /// 配置用户权限
+        /// </summary
+        public void SetRoles(string[] roles)
+        {
+            CustomClaims!["roles"] = roles;
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        /// <summary>
+        /// 清空用户权限
+        /// </summary>
+        public void ClearRoles()
+        {
+            CustomClaims!["roles"] = Array.Empty<string>();
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
     }
 }

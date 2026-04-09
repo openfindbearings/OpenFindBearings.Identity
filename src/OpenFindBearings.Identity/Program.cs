@@ -12,6 +12,9 @@ builder.Services.AddControllersWithViews();
 // OpenIddict
 builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());
 
+// 添加服务
+builder.Services.AddApplicationServices();
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -28,7 +31,7 @@ app.Logger.LogInformation("启动 OpenFindBearings Identity");
 // 1. 处理代理头，启用转发头中间件
 app.UseForwardedHeaders();
 
-// Configure the HTTP request pipeline.
+// 2. 配置错误页面及其他开发环境专有设置
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -37,9 +40,7 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Home/Error");
-
-    // 2. HSTS（可选）
-    //app.UseHsts();              
+    app.UseHsts();    // HSTS（可选）           
 }
 
 // 3. HTTPS 重定向

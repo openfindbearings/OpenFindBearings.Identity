@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Models.Enums;
 
 namespace OpenFindBearings.Identity.Data.Repositories
 {
@@ -12,13 +13,13 @@ namespace OpenFindBearings.Identity.Data.Repositories
             _context = context;
         }
 
-        public async Task<UserLoginBinding?> GetByUserAndProviderAsync(Guid userId, LoginProvider provider)
+        public async Task<UserLoginBinding?> GetByUserAndProviderAsync(Guid userId, LoginProviders provider)
         {
             return await _context.UserLoginBindings
                 .FirstOrDefaultAsync(b => b.UserId == userId && b.Provider == provider && !b.IsUnbound);
         }
 
-        public async Task<UserLoginBinding?> GetByProviderAndUserIdAsync(LoginProvider provider, string providerUserId)
+        public async Task<UserLoginBinding?> GetByProviderAndUserIdAsync(LoginProviders provider, string providerUserId)
         {
             return await _context.UserLoginBindings
                 .FirstOrDefaultAsync(b => b.Provider == provider && b.ProviderUserId == providerUserId && !b.IsUnbound);

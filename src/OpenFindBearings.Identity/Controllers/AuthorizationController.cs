@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.IdentityModel.Tokens;
+using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Helpers;
+using OpenFindBearings.Identity.Models.Enums;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
@@ -38,13 +40,13 @@ namespace OpenFindBearings.Identity.Controllers
 
             return request.GrantType switch
             {
-                GrantTypes.ClientCredentials => await HandleClientCredentialsAsync(request),
-                GrantTypes.Password => await HandlePasswordAsync(request),
-                "sms" => await HandleSmsCodeAsync(request),
-                "wechat" => await HandleWeChatAsync(request),
-                "qq" => await HandleQQAsync(request),
-                "biometric" => await HandleBiometricAsync(request),
-                GrantTypes.RefreshToken => await HandleRefreshTokenAsync(request),
+                GrantTypeConstants.ClientCredentials => await HandleClientCredentialsAsync(request),
+                GrantTypeConstants.Password => await HandlePasswordAsync(request),
+                GrantTypeConstants.Sms => await HandleSmsCodeAsync(request),
+                GrantTypeConstants.WeChat => await HandleWeChatAsync(request),
+                GrantTypeConstants.QQ => await HandleQQAsync(request),
+                GrantTypeConstants.Biometric => await HandleBiometricAsync(request),
+                GrantTypeConstants.RefreshToken => await HandleRefreshTokenAsync(request),
                 _ => Forbid(),
             };
         }
@@ -116,7 +118,7 @@ namespace OpenFindBearings.Identity.Controllers
                         .SetClaim(Claims.Email, user.Email)
                         .SetClaim(Claims.Name, user.Name)
                         .SetClaim(Claims.PreferredUsername, request.Username!)
-                        .SetClaims(Claims.Role, [.. "user"]);
+                        .SetClaims(Claims.Role, [.. (string[])user.CustomClaims!["roles"]]);
 
                 // Set the list of scopes granted to the client application.
                 identity.SetScopes(new[]

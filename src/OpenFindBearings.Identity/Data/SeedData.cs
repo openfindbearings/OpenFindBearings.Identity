@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Models.Enums;
 using OpenIddict.Abstractions;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -13,11 +13,18 @@ namespace OpenFindBearings.Identity.Data
     public static class SeedData
     {
         public static async Task SeedAsync(IServiceProvider provider, ILogger logger, bool isDevelopment)
-        {
+        {           
+            isDevelopment = true; // TODO: 正式发布的时候取消，目前测试期间isDevelopment始终为true
+
             try
             {
                 await using var context = provider.GetRequiredService<ApplicationDbContext>();
                 await using var scope = provider.CreateAsyncScope();
+
+                if (isDevelopment)
+                {
+                    await context.Database.EnsureDeletedAsync();  // 测试期间每次删除，节省每次手动删库的操作
+                }
 
                 await context.Database.MigrateAsync();
 
@@ -116,7 +123,7 @@ namespace OpenFindBearings.Identity.Data
                         Name = "api:sync",
                         Resources =
                         {
-                            "openfindbearings-api"
+                           ApiResourceConstants.BaseApi
                         }
                     });
 
@@ -162,7 +169,7 @@ namespace OpenFindBearings.Identity.Data
                     lastLoginDevice: null,
                     customClaims: new Dictionary<string, object>
                     {
-                        ["role"] = "SuperAdmin",
+                        ["roles"] = new string[] { "SuperAdmin" },
                         ["department"] = "IT",
                         ["level"] = 5
                     },
@@ -204,10 +211,10 @@ namespace OpenFindBearings.Identity.Data
                         createdAt: DateTimeOffset.UtcNow.AddDays(-30),
                         lastLoginAt: DateTimeOffset.UtcNow.AddDays(-1),
                         lastLoginIp: "192.168.1.100",
-                        lastLoginDevice: DeviceTypes.Web,
+                        lastLoginDevice: DeviceTypeConstants.Web,
                         customClaims: new Dictionary<string, object>
                         {
-                            ["role"] = "User",
+                           ["roles"] = new string[] {  "User"},
                             ["vip_level"] = 1,
                             ["points"] = 1200
                         },
@@ -244,10 +251,10 @@ namespace OpenFindBearings.Identity.Data
                         createdAt: DateTimeOffset.UtcNow.AddDays(-20),
                         lastLoginAt: DateTimeOffset.UtcNow.AddDays(-3),
                         lastLoginIp: "192.168.1.101",
-                        lastLoginDevice: DeviceTypes.IOS,
+                        lastLoginDevice: DeviceTypeConstants.IOS,
                         customClaims: new Dictionary<string, object>
                         {
-                            ["role"] = "User",
+                            ["roles"] = new string[] {  "User"},
                             ["vip_level"] = 2,
                             ["points"] = 3500
                         },
@@ -284,10 +291,10 @@ namespace OpenFindBearings.Identity.Data
                         createdAt: DateTimeOffset.UtcNow.AddDays(-10),
                         lastLoginAt: DateTimeOffset.UtcNow.AddDays(-2),
                         lastLoginIp: "192.168.1.102",
-                        lastLoginDevice: DeviceTypes.Android,
+                        lastLoginDevice: DeviceTypeConstants.Android,
                         customClaims: new Dictionary<string, object>
                         {
-                            ["role"] = "User",
+                            ["roles"] = new string[] {  "User"},
                             ["vip_level"] = 0,
                             ["points"] = 100
                         },
@@ -319,7 +326,7 @@ namespace OpenFindBearings.Identity.Data
                         lastLoginDevice: null,
                         customClaims: new Dictionary<string, object>
                         {
-                            ["role"] = "User",
+                            ["roles"] = new string[] { "User"},
                             ["locked_reason"] = "多次密码错误"
                         },
                         address: null,
@@ -352,7 +359,7 @@ namespace OpenFindBearings.Identity.Data
                         lastLoginDevice: null,
                         customClaims: new Dictionary<string, object>
                         {
-                            ["role"] = "TestUser",
+                            ["roles"] = new string[] {  "TestUser"},
                             ["is_test"] = true
                         },
                         address: null,
@@ -396,7 +403,7 @@ namespace OpenFindBearings.Identity.Data
             {
                 UserLoginBinding.CreateFromSeed(
                     userId: zhangsan.Id,
-                    provider: LoginProvider.WeChatMiniProgram,
+                    provider: LoginProviders.WeChatMiniProgram,
                     providerUserId: "wechat_openid_zhangsan_12345",
                     unionId: "wechat_unionid_zhangsan",
                     providerNickname: "张三的微信",
@@ -418,7 +425,7 @@ namespace OpenFindBearings.Identity.Data
 
                 UserLoginBinding.CreateFromSeed(
                     userId: zhangsan.Id,
-                    provider: LoginProvider.Alipay,
+                    provider: LoginProviders.Alipay,
                     providerUserId: "alipay_userid_zhangsan_67890",
                     unionId: null,
                     providerNickname: "张三的支付宝",
@@ -437,7 +444,7 @@ namespace OpenFindBearings.Identity.Data
 
                 UserLoginBinding.CreateFromSeed(
                     userId: lisi.Id,
-                    provider: LoginProvider.WeChatWeb,
+                    provider: LoginProviders.WeChatWeb,
                     providerUserId: "wechat_openid_lisi_11111",
                     unionId: "wechat_unionid_lisi",
                     providerNickname: "李四的微信",
@@ -451,7 +458,7 @@ namespace OpenFindBearings.Identity.Data
 
                 UserLoginBinding.CreateFromSeed(
                     userId: wangwu.Id,
-                    provider: LoginProvider.PhoneGateway,
+                    provider: LoginProviders.PhoneGateway,
                     providerUserId: wangwu.PhoneNumber ?? "+8613800000003",
                     unionId: null,
                     providerNickname: null,
@@ -496,7 +503,7 @@ namespace OpenFindBearings.Identity.Data
                 "refresh_token",
                 "client_credentials"
             };
-            var deviceTypes = new[] { DeviceTypes.Web, DeviceTypes.IOS, DeviceTypes.Android, DeviceTypes.WeChat };
+            var deviceTypes = new[] { DeviceTypeConstants.Web, DeviceTypeConstants.IOS, DeviceTypeConstants.Android, DeviceTypeConstants.WeChat };
             var statuses = new[] { "success", "failed" };
 
             foreach (var user in users)
@@ -543,7 +550,7 @@ namespace OpenFindBearings.Identity.Data
                     clientId: "admin_panel",
                     ipAddress: "127.0.0.1",
                     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    deviceType: DeviceTypes.Web,
+                    deviceType: DeviceTypeConstants.Web,
                     deviceId: null,
                     createdAt: DateTimeOffset.UtcNow
                 ));
@@ -570,51 +577,51 @@ namespace OpenFindBearings.Identity.Data
                 SmsVerificationCode.CreateFromSeed(
                     phoneNumber: "+8613800000002",
                     code: "123456",
-                    type: SmsCodeTypes.Login,
+                    type: SmsCodeTypeConstants.Login,
                     isUsed: true,
                     usedAt: DateTimeOffset.UtcNow.AddHours(-2),
                     expiresAt: DateTimeOffset.UtcNow.AddHours(-1),
                     createdAt: DateTimeOffset.UtcNow.AddHours(-3),
                     attemptCount: 1
                 ),
-                
+
                 SmsVerificationCode.CreateFromSeed(
                     phoneNumber: "+8613800000003",
                     code: "654321",
-                    type: SmsCodeTypes.Login,
+                    type: SmsCodeTypeConstants.Login,
                     isUsed: false,
                     usedAt: null,
                     expiresAt: DateTimeOffset.UtcNow.AddMinutes(-5),
                     createdAt: DateTimeOffset.UtcNow.AddMinutes(-10),
                     attemptCount: 0
                 ),
-                
+
                 SmsVerificationCode.CreateFromSeed(
                     phoneNumber: "+8613800000002",
                     code: "888888",
-                    type: SmsCodeTypes.Login,
+                    type: SmsCodeTypeConstants.Login,
                     isUsed: false,
                     usedAt: null,
                     expiresAt: DateTimeOffset.UtcNow.AddMinutes(5),
                     createdAt: DateTimeOffset.UtcNow,
                     attemptCount: 0
                 ),
-                
+
                 SmsVerificationCode.CreateFromSeed(
                     phoneNumber: "+8613800000004",
                     code: "999999",
-                    type: SmsCodeTypes.Bind,
+                    type: SmsCodeTypeConstants.Bind,
                     isUsed: false,
                     usedAt: null,
                     expiresAt: DateTimeOffset.UtcNow.AddMinutes(10),
                     createdAt: DateTimeOffset.UtcNow,
                     attemptCount: 0
                 ),
-                
+
                 SmsVerificationCode.CreateFromSeed(
                     phoneNumber: "+8613800000005",
                     code: "111111",
-                    type: SmsCodeTypes.ResetPassword,
+                    type: SmsCodeTypeConstants.ResetPassword,
                     isUsed: false,
                     usedAt: null,
                     expiresAt: DateTimeOffset.UtcNow.AddMinutes(10),
@@ -650,10 +657,10 @@ namespace OpenFindBearings.Identity.Data
         {
             return deviceType switch
             {
-                DeviceTypes.Web => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
-                DeviceTypes.IOS => "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-                DeviceTypes.Android => "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/120.0.0.0",
-                DeviceTypes.WeChat => "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) MicroMessenger/8.0.0",
+                DeviceTypeConstants.Web => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+                DeviceTypeConstants.IOS => "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+                DeviceTypeConstants.Android => "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/120.0.0.0",
+                DeviceTypeConstants.WeChat => "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) MicroMessenger/8.0.0",
                 _ => "Mozilla/5.0 (Unknown) AppleWebKit/537.36"
             };
         }
