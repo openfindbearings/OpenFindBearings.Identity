@@ -53,7 +53,34 @@ namespace OpenFindBearings.Identity.Controllers
 
         private async Task<IActionResult> HandleRefreshTokenAsync(OpenIddictRequest request)
         {
-            throw new NotImplementedException();
+            if (request.IsRefreshTokenGrantType())
+            {
+                // OpenIddict 自动验证刷新令牌
+                // 如果无效，请求不会被路由到这个方法
+
+                // 创建新令牌
+                var identity = new ClaimsIdentity(
+                    authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                    nameType: Claims.Name,
+                    roleType: Claims.Role);
+
+                // 使用 client_id 作为 subject（客户端凭证模式）
+                identity.SetClaim(Claims.Subject, request.ClientId);
+                identity.SetClaim(Claims.Name, request.ClientId);
+
+                // 设置 scopes
+                var scopes = request.GetScopes();
+                identity.SetScopes(scopes);
+                identity.SetResources(await _scopeRepository.ListResourcesAsync(identity));
+                identity.SetDestinations(GetDestinations);
+
+                _logger.LogInformation("刷新令牌: ClientId={ClientId}, Scopes={Scopes}", request.ClientId, scopes);
+
+                return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            _logger.LogWarning("不支持的刷新令牌授权类型");
+            throw new InvalidOperationException("The refresh token grant is not properly configured.");
         }
 
         private async Task<IActionResult> HandleBiometricAsync(OpenIddictRequest request)
