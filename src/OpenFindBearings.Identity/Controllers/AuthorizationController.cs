@@ -8,6 +8,8 @@ using OpenFindBearings.Identity.Helpers;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
+using System.Text.Json;
+using OpenFindBearings.Identity.Extensions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace OpenFindBearings.Identity.Controllers
@@ -143,7 +145,7 @@ namespace OpenFindBearings.Identity.Controllers
                         .SetClaim(Claims.Email, user.Email)
                         .SetClaim(Claims.Name, user.Name)
                         .SetClaim(Claims.PreferredUsername, request.Username!)
-                        .SetClaims(Claims.Role, [.. (string[])user.CustomClaims!["roles"]]);
+                        .SetClaims(Claims.Role, [.. ((JsonElement)user.CustomClaims!["roles"]).GetStringArray()]);
 
                 // Set the list of scopes granted to the client application.
                 identity.SetScopes(new[]
