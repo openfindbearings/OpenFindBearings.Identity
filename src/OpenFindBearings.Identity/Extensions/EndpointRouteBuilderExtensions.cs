@@ -55,30 +55,39 @@ namespace OpenFindBearings.Identity.Extensions
             // 【修复点】：排除 "startup" 标签的检查。
             // 原因：在数据库迁移期间，数据库连接可能被占用。如果这里检查数据库，会导致就绪探针失败，
             // 进而导致 K8s 认为服务未就绪甚至重启服务，导致迁移永远无法完成。
+            //app.MapHealthChecks("/ready", new HealthCheckOptions
+            //{
+            //    Predicate = check => !check.Tags.Contains("startup")
+            //});
+            // 就绪探针 (/ready) - 检查是否准备好接收流量
+            // 排除 "startup" 标签的检查（数据库等启动时需要的检查）
             app.MapHealthChecks("/ready", new HealthCheckOptions
             {
-                Predicate = check => !check.Tags.Contains("startup")
-            });
-
-            // --- B. 就绪探针 (/ready) ---
-            // 职责：检查是否准备好接收流量（轻量级检查）
-            app.MapHealthChecks("/ready", new HealthCheckOptions
-            {
-                // 只包含轻量级检查（排除启动标记）
                 Predicate = check => !check.Tags.Contains("startup"),
                 ResponseWriter = async (context, report) =>
                 {
-                    // 如果没有注册任何检查项，手动处理
+                    // 如果没有注册任何检查项，视为健康
                     if (!report.Entries.Any())
                     {
                         context.Response.StatusCode = 200;
-                        await context.Response.WriteAsync("Healthy");
+                        await context.Response.WriteAsync("Ready");
                         return;
                     }
 
-                    var statusCode = report.Status == HealthStatus.Unhealthy ? 503 : 200;
-                    context.Response.StatusCode = statusCode;
-                    await context.Response.WriteAsync(report.Status.ToString());
+                    // 只检查 Unhealthy，Degraded 视为就绪
+                    var isUnhealthy = report.Entries.Any(e =>
+                        e.Value.Status == HealthStatus.Unhealthy);
+
+                    if (isUnhealthy)
+                    {
+                        context.Response.StatusCode = 503;
+                        await context.Response.WriteAsync("Not Ready");
+                    }
+                    else
+                    {
+                        context.Response.StatusCode = 200;
+                        await context.Response.WriteAsync("Ready");
+                    }
                 }
             });
         }

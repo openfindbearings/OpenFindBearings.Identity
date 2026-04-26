@@ -1,12 +1,10 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Helpers;
-using OpenFindBearings.Identity.Models.Enums;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
