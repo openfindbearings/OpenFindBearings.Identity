@@ -120,7 +120,7 @@ namespace OpenFindBearings.Identity.Controllers
 
                 // Validate the username/password parameters and ensure the account is not locked out.       
                 var result = user.CheckPassword(request.Password!, PasswordHasher.Verify);
-                if (result)
+                if (!result)
                 {
                     var properties = new AuthenticationProperties(new Dictionary<string, string?>
                     {
