@@ -59,6 +59,28 @@ namespace OpenFindBearings.Identity.Extensions
             {
                 Predicate = check => !check.Tags.Contains("startup")
             });
+
+            // --- B. 就绪探针 (/ready) ---
+            // 职责：检查是否准备好接收流量（轻量级检查）
+            app.MapHealthChecks("/ready", new HealthCheckOptions
+            {
+                // 只包含轻量级检查（排除启动标记）
+                Predicate = check => !check.Tags.Contains("startup"),
+                ResponseWriter = async (context, report) =>
+                {
+                    // 如果没有注册任何检查项，手动处理
+                    if (!report.Entries.Any())
+                    {
+                        context.Response.StatusCode = 200;
+                        await context.Response.WriteAsync("Healthy");
+                        return;
+                    }
+
+                    var statusCode = report.Status == HealthStatus.Unhealthy ? 503 : 200;
+                    context.Response.StatusCode = statusCode;
+                    await context.Response.WriteAsync(report.Status.ToString());
+                }
+            });
         }
     }
 }
