@@ -1,5 +1,6 @@
 ﻿namespace OpenFindBearings.Identity.Constants
 {
+    // User 实体中有 LastLoginDevice 字段，需要这些常量
     public static class DeviceTypeConstants
     {
         public const string IOS = "ios";

@@ -1,0 +1,52 @@
+﻿@{
+    ViewData["Title"] = "仪表盘";
+}
+
+<div class="row">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">用户总数</h5>
+                <h2 class="card-text">@ViewBag.TotalUsers</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">今日日志</h5>
+                <h2 class="card-text">@ViewBag.TodayLogs</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>快速导航</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <a href="@Url.Action("Index", "User")" class="btn btn-outline-primary w-100 mb-2">
+                    <i class="bi bi-people"></i> 用户管理
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="@Url.Action("Index", "Role")" class="btn btn-outline-secondary w-100 mb-2">
+                    <i class="bi bi-person-badge"></i> 角色管理
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="@Url.Action("Index", "Client")" class="btn btn-outline-info w-100 mb-2">
+                    <i class="bi bi-app"></i> 客户端
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="@Url.Action("Index", "AuditLog")" class="btn btn-outline-dark w-100 mb-2">
+                    <i class="bi bi-file-text"></i> 审计日志
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

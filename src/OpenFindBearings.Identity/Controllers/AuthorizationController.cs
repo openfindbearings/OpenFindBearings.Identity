@@ -3,254 +3,324 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
-using OpenFindBearings.Identity.Helpers;
+using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
-using System.Text.Json;
-using OpenFindBearings.Identity.Extensions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
-using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 
 namespace OpenFindBearings.Identity.Controllers
 {
+    /// <summary>
+    /// 授权控制器 - 处理 OAuth 2.0 / OIDC 令牌请求
+    /// </summary>
     public class AuthorizationController : Controller
     {
-        private readonly IClientRepository _clientRepository;
-        private readonly IScopeRepository _scopeRepository;
-        private readonly IUserRepository _userRepository;
-        private readonly ILogger<AuthorizationController> _logger; 
+        private readonly IUserService _userService;
+        private readonly IClientService _clientService;
+        private readonly IScopeService _scopeService;
+        private readonly ILogger<AuthorizationController> _logger;
 
-        public AuthorizationController(IClientRepository clientRepository, IScopeRepository scopeRepository, IUserRepository userRepository, ILogger<AuthorizationController> logger)
+        public AuthorizationController(
+            IUserService userService,
+            IClientService clientService,
+            IScopeService scopeService,
+            ILogger<AuthorizationController> logger)
         {
-            _clientRepository = clientRepository;
-            _scopeRepository = scopeRepository;
-            _userRepository = userRepository;
-
+            _userService = userService;
+            _clientService = clientService;
+            _scopeService = scopeService;
             _logger = logger;
         }
 
-        [HttpPost("~/connect/token"), IgnoreAntiforgeryToken, Produces("application/json")]
+        /// <summary>
+        /// Token 端点 - 处理所有授权类型的令牌请求
+        /// </summary>
+        [HttpPost("~/connect/token")]
+        [IgnoreAntiforgeryToken]
+        [Produces("application/json")]
         public async Task<IActionResult> Exchange()
         {
-            var request = HttpContext.GetOpenIddictServerRequest() ??
-                throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
+            var request = HttpContext.GetOpenIddictServerRequest()
+                ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
-            _logger.LogInformation("收到Token请求: GrantType={GrantType}, ClientId={ClientId}", request.GrantType, request.ClientId);
+            _logger.LogInformation("收到 Token 请求: GrantType={GrantType}, ClientId={ClientId}", request.GrantType, request.ClientId);
 
             return request.GrantType switch
             {
                 GrantTypeConstants.ClientCredentials => await HandleClientCredentialsAsync(request),
                 GrantTypeConstants.Password => await HandlePasswordAsync(request),
+                GrantTypeConstants.RefreshToken => await HandleRefreshTokenAsync(request),
                 GrantTypeConstants.Sms => await HandleSmsCodeAsync(request),
                 GrantTypeConstants.WeChat => await HandleWeChatAsync(request),
                 GrantTypeConstants.QQ => await HandleQQAsync(request),
                 GrantTypeConstants.Biometric => await HandleBiometricAsync(request),
-                GrantTypeConstants.RefreshToken => await HandleRefreshTokenAsync(request),
-                _ => Forbid(),
+                _ => Forbid()
             };
         }
 
-        private async Task<IActionResult> HandleRefreshTokenAsync(OpenIddictRequest request)
+        #region 授权类型处理
+
+        /// <summary>
+        /// 处理客户端凭证授权 (client_credentials)
+        /// </summary>
+        private async Task<IActionResult> HandleClientCredentialsAsync(OpenIddictRequest request)
         {
-            if (request.IsRefreshTokenGrantType())
+            if (!request.IsClientCredentialsGrantType())
             {
-                // OpenIddict 自动验证刷新令牌
-                // 如果无效，请求不会被路由到这个方法
-
-                // 创建新令牌
-                var identity = new ClaimsIdentity(
-                    authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                    nameType: Claims.Name,
-                    roleType: Claims.Role);
-
-                // 使用 client_id 作为 subject（客户端凭证模式）
-                identity.SetClaim(Claims.Subject, request.ClientId);
-                identity.SetClaim(Claims.Name, request.ClientId);
-
-                // 设置 scopes
-                var scopes = request.GetScopes();
-                identity.SetScopes(scopes);
-                identity.SetResources(await _scopeRepository.ListResourcesAsync(identity));
-                identity.SetDestinations(GetDestinations);
-
-                _logger.LogInformation("刷新令牌: ClientId={ClientId}, Scopes={Scopes}", request.ClientId, scopes);
-
-                return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
+                throw new NotImplementedException("The specified grant type is not implemented.");
             }
 
-            _logger.LogWarning("不支持的刷新令牌授权类型");
-            throw new InvalidOperationException("The refresh token grant is not properly configured.");
+            // 验证客户端是否存在
+            var client = await _clientService.GetByClientIdAsync(request.ClientId!);
+            if (client == null)
+            {
+                _logger.LogWarning("客户端凭证模式: 客户端不存在 {ClientId}", request.ClientId);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidClient,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The client application is not found."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 创建身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 添加客户端声明
+            identity.SetClaim(Claims.Subject, client.ClientId);
+            identity.SetClaim(Claims.Name, client.DisplayName);
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            identity.SetScopes(scopes);
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("客户端凭证模式: ClientId={ClientId}, Scopes={Scopes}",
+                request.ClientId, scopes.Count == 0 ? "none" : string.Join(",", scopes));
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        private async Task<IActionResult> HandleBiometricAsync(OpenIddictRequest request)
+        /// <summary>
+        /// 处理密码授权 (password)
+        /// </summary>
+        private async Task<IActionResult> HandlePasswordAsync(OpenIddictRequest request)
         {
-            throw new NotImplementedException();
+            if (!request.IsPasswordGrantType())
+            {
+                _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
+                throw new NotImplementedException("The specified grant type is not implemented.");
+            }
+
+            // 验证用户名和密码
+            var user = await _userService.GetByUsernameAsync(request.Username!);
+            if (user == null)
+            {
+                _logger.LogWarning("密码模式: 用户不存在 {Username}", request.Username);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The username/password couple is invalid."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 检查用户是否可以登录 - 使用 Service 方法
+            var canLogin = await _userService.CheckCanLoginAsync(user.Id);
+            if (!canLogin)
+            {
+                _logger.LogWarning("密码模式: 用户无法登录 {Username}", request.Username);
+                await _userService.RecordLoginFailureAsync(user.Id);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The account is not available."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 验证密码
+            var isValidPassword = await _userService.CheckPasswordAsync(user.Id, request.Password!);
+            if (!isValidPassword)
+            {
+                _logger.LogWarning("密码模式: 密码错误 {Username}", request.Username);
+                await _userService.RecordLoginFailureAsync(user.Id);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The username/password couple is invalid."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 记录登录成功
+            await _userService.RecordLoginSuccessAsync(user.Id, HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            // 获取用户角色和声明
+            var roles = await _userService.GetRolesAsync(user.Id);
+            var claims = await _userService.GetClaimsAsync(user.Id);
+
+            // 创建身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 添加用户声明
+            identity.SetClaim(Claims.Subject, user.Sub);
+            identity.SetClaim(Claims.Email, user.Email);
+            identity.SetClaim(Claims.Name, user.Name ?? user.UserName);
+            identity.SetClaim(Claims.PreferredUsername, user.UserName);
+
+            // 添加角色声明
+            foreach (var role in roles)
+            {
+                identity.SetClaim(Claims.Role, role);
+            }
+
+            // 添加自定义声明
+            foreach (var claim in claims)
+            {
+                identity.SetClaim(claim.Type, claim.Value);
+            }
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
+            identity.SetScopes(allowedScopes);
+
+            // 设置资源
+            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("密码模式: 用户 {Username} 登录成功, Scopes={Scopes}",
+                request.Username, string.Join(",", allowedScopes));
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        private async Task<IActionResult> HandleQQAsync(OpenIddictRequest request)
+        /// <summary>
+        /// 处理刷新令牌授权 (refresh_token)
+        /// </summary>
+        private async Task<IActionResult> HandleRefreshTokenAsync(OpenIddictRequest request)
         {
-            throw new NotImplementedException();
+            if (!request.IsRefreshTokenGrantType())
+            {
+                _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
+                throw new NotImplementedException("The specified grant type is not implemented.");
+            }
+
+            // 创建身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 使用 client_id 作为 subject
+            identity.SetClaim(Claims.Subject, request.ClientId);
+            identity.SetClaim(Claims.Name, request.ClientId);
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            identity.SetScopes(scopes);
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("刷新令牌: ClientId={ClientId}, Scopes={Scopes}",
+                request.ClientId, scopes.Count == 0 ? "none" : string.Join(",", scopes));
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        #endregion
+
+        #region 待实现授权类型
+
+        private async Task<IActionResult> HandleSmsCodeAsync(OpenIddictRequest request)
+        {
+            _logger.LogWarning("短信验证码授权尚未实现");
+            throw new NotImplementedException("SMS code grant type is not implemented yet.");
         }
 
         private async Task<IActionResult> HandleWeChatAsync(OpenIddictRequest request)
         {
-            throw new NotImplementedException();
+            _logger.LogWarning("微信授权尚未实现");
+            throw new NotImplementedException("WeChat grant type is not implemented yet.");
         }
 
-        private async Task<IActionResult> HandleSmsCodeAsync(OpenIddictRequest request)
+        private async Task<IActionResult> HandleQQAsync(OpenIddictRequest request)
         {
-            throw new NotImplementedException();
+            _logger.LogWarning("QQ授权尚未实现");
+            throw new NotImplementedException("QQ grant type is not implemented yet.");
         }
 
-        private async Task<IActionResult> HandlePasswordAsync(OpenIddictRequest request)
+        private async Task<IActionResult> HandleBiometricAsync(OpenIddictRequest request)
         {
-            if (request.IsPasswordGrantType())
+            _logger.LogWarning("生物识别授权尚未实现");
+            throw new NotImplementedException("Biometric grant type is not implemented yet.");
+        }
+
+        #endregion
+
+        #region 辅助方法
+
+        /// <summary>
+        /// 获取作用域关联的资源列表
+        /// </summary>
+        private async Task<IEnumerable<string>> GetScopeResourcesAsync(IEnumerable<string> scopes)
+        {
+            var resources = new HashSet<string>();
+            foreach (var scopeName in scopes)
             {
-                var user = await _userRepository.GetByUsernameAsync(request.Username!);
-                if (user == null)
+                var scope = await _scopeService.GetByNameAsync(scopeName);
+                if (scope != null && scope.Resources != null)
                 {
-                    var properties = new AuthenticationProperties(new Dictionary<string, string?>
+                    foreach (var resource in scope.Resources)
                     {
-                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] =
-                            "The username/password couple is invalid."
-                    });
-
-                    return Forbid(properties, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                        resources.Add(resource);
+                    }
                 }
-
-                // Validate the username/password parameters and ensure the account is not locked out.       
-                var result = user.CheckPassword(request.Password!, PasswordHasher.Verify);
-                if (!result)
-                {
-                    var properties = new AuthenticationProperties(new Dictionary<string, string?>
-                    {
-                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] =
-                            "The username/password couple is invalid."
-                    });
-
-                    return Forbid(properties, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-                }
-
-                // Create the claims-based identity that will be used by OpenIddict to generate tokens.
-                var identity = new ClaimsIdentity(
-                    authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                    nameType: Claims.Name,
-                    roleType: Claims.Role);
-
-                // Add the claims that will be persisted in the tokens.
-                identity.SetClaim(Claims.Subject, user.Sub)
-                        .SetClaim(Claims.Email, user.Email)
-                        .SetClaim(Claims.Name, user.Name)
-                        .SetClaim(Claims.PreferredUsername, request.Username!)
-                        .SetClaims(Claims.Role, [.. ((JsonElement)user.CustomClaims!["roles"]).GetStringArray()]);
-
-                // Set the list of scopes granted to the client application.
-                identity.SetScopes(new[]
-                {
-                    Scopes.OpenId,
-                    Scopes.Email,
-                    Scopes.Profile,
-                    Scopes.Roles
-                }.Intersect(request.GetScopes()));
-
-                identity.SetDestinations(GetDestinations);
-
-                return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
-
-            _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
-            throw new NotImplementedException("The specified grant type is not implemented.");
+            return resources;
         }
 
-        private async Task<IActionResult> HandleClientCredentialsAsync(OpenIddictRequest request)
-        {
-            if (request.IsClientCredentialsGrantType())
-            {
-                // Note: the client credentials are automatically validated by OpenIddict:
-                // if client_id or client_secret are invalid, this action won't be invoked.
-
-                var client = await _clientRepository.GetByClientIdAsync(request.ClientId!);
-                if (client == null)
-                {
-                    _logger.LogWarning("客户端凭证模式: 客户端不存在 {ClientId}", request.ClientId);
-                    throw new InvalidOperationException("The application details cannot be found in the database.");
-                }
-
-                // Create the claims-based identity that will be used by OpenIddict to generate tokens.
-                var identity = new ClaimsIdentity(
-                    authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                    nameType: Claims.Name,
-                    roleType: Claims.Role);
-
-                // Add the claims that will be persisted in the tokens (use the client_id as the subject identifier).
-                identity.SetClaim(Claims.Subject, client.ClientId);
-                identity.SetClaim(Claims.Name, client.DisplayName);
-
-                // Note: In the original OAuth 2.0 specification, the client credentials grant
-                // doesn't return an identity token, which is an OpenID Connect concept.
-                //
-                // As a non-standardized extension, OpenIddict allows returning an id_token
-                // to convey information about the client application when the "openid" scope
-                // is granted (i.e specified when calling principal.SetScopes()). When the "openid"
-                // scope is not explicitly set, no identity token is returned to the client application.
-
-                // Set the list of scopes granted to the client application in access_token.
-                var scopes = request.GetScopes();
-                identity.SetScopes(scopes);
-                identity.SetResources(await _scopeRepository.ListResourcesAsync(identity));
-                identity.SetDestinations(GetDestinations);
-                
-                _logger.LogInformation("客户端凭证模式: ClientId={ClientId}, Scopes={Scopes}", request.ClientId, scopes.IsDefaultOrEmpty ? "none" : string.Join(",", scopes));
-
-                return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-            }
-
-            _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
-            throw new NotImplementedException("The specified grant type is not implemented.");
-        }
-
+        /// <summary>
+        /// 设置声明的目标（哪些令牌包含该声明）
+        /// </summary>
         private static IEnumerable<string> GetDestinations(Claim claim)
         {
-            // Note: by default, claims are NOT automatically included in the access and identity tokens.
-            // To allow OpenIddict to serialize them, you must attach them a destination, that specifies
-            // whether they should be included in access tokens, in identity tokens or in both.
-
             switch (claim.Type)
             {
-                case Claims.Name or Claims.PreferredUsername:
+                case Claims.Name:
+                case Claims.PreferredUsername:
                     yield return Destinations.AccessToken;
-
                     if (claim.Subject!.HasScope(Scopes.Profile))
                         yield return Destinations.IdentityToken;
-
                     yield break;
 
                 case Claims.Email:
                     yield return Destinations.AccessToken;
-
                     if (claim.Subject!.HasScope(Scopes.Email))
                         yield return Destinations.IdentityToken;
-
                     yield break;
 
                 case Claims.Role:
                     yield return Destinations.AccessToken;
-
                     if (claim.Subject!.HasScope(Scopes.Roles))
                         yield return Destinations.IdentityToken;
-
                     yield break;
 
-                // Never include the security stamp in the access and identity tokens, as it's a secret value.
-                case "AspNet.Identity.SecurityStamp": yield break;
+                case "AspNet.Identity.SecurityStamp":
+                    yield break;
 
                 default:
                     yield return Destinations.AccessToken;
                     yield break;
             }
         }
+
+        #endregion
     }
 }

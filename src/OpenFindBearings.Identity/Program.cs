@@ -9,6 +9,27 @@ builder.Services.ConfigureForwardedHeaders(builder.Environment.IsDevelopment());
 // MVC
 builder.Services.AddControllersWithViews();
 
+// Identity
+builder.Services.AddIdentityService();
+
+// 配置 Cookie 认证
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+    options.ExpireTimeSpan = TimeSpan.FromDays(7);
+    options.SlidingExpiration = true;
+
+    // 关键：Cookie 安全设置
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;  // 始终使用 Secure（仅 HTTPS）
+
+    // 使用统一域名
+    options.Cookie.Domain = null;  // 自动使用当前域名
+});
+
 // OpenIddict
 builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());
 
