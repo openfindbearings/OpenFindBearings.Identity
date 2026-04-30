@@ -1,6 +1,6 @@
 using OpenFindBearings.Identity.Models.Entities;
 
-namespace OpenFindBearings.Identity.Data.Repositories
+namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
 {
     public interface ISmsVerificationCodeRepository
     {

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories;
+using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenIddict.Abstractions;
 using Quartz;
 using System.Net;

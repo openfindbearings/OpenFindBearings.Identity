@@ -2,7 +2,7 @@ using OpenFindBearings.Identity.Models;
 using OpenFindBearings.Identity.Models.Entities;
 using System.Security.Claims;
 
-namespace OpenFindBearings.Identity.Data.Repositories
+namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
 {
     public interface IScopeRepository
     {
