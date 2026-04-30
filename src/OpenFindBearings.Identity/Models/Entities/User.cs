@@ -1,4 +1,4 @@
-using OpenFindBearings.Identity.Models.ViewModels.User;
+using OpenFindBearings.Identity.Areas.Admin.Models.ViewModels.User;
 using OpenIddict.Abstractions;
 
 namespace OpenFindBearings.Identity.Models.Entities

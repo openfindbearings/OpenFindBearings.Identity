@@ -2,8 +2,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
-using OpenFindBearings.Identity.Models;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Models.ViewModels;
 using OpenIddict.Abstractions;
 using OpenIddict.EntityFrameworkCore.Models;
 

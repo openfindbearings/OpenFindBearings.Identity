@@ -1,5 +1,5 @@
-using OpenFindBearings.Identity.Models;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Models.ViewModels;
 using System.Security.Claims;
 
 namespace OpenFindBearings.Identity.Data.Repositories.Interfaces

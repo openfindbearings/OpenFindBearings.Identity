@@ -1,4 +1,4 @@
-namespace OpenFindBearings.Identity.Models.ViewModels.Scope
+namespace OpenFindBearings.Identity.Areas.Admin.Models.ViewModels.Scope
 {
     /// <summary>
     /// 权限范围视图模型 - 用于前端界面展示

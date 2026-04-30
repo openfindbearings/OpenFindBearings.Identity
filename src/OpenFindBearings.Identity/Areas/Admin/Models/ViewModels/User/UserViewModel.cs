@@ -1,4 +1,4 @@
-namespace OpenFindBearings.Identity.Models.ViewModels.User
+namespace OpenFindBearings.Identity.Areas.Admin.Models.ViewModels.User
 {
     /// <summary>
     /// 用户视图模型 - 用于前端界面展示
