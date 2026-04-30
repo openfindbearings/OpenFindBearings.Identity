@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.Entities;
 
 namespace OpenFindBearings.Identity.Data.Repositories

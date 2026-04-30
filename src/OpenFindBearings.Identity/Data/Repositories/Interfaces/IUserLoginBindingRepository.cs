@@ -1,7 +1,7 @@
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Models.Enums;
 
-namespace OpenFindBearings.Identity.Data.Repositories
+namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
 {
     public interface IUserLoginBindingRepository
     {

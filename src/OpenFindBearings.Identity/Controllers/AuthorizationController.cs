@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
-using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Helpers;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -11,6 +10,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using OpenFindBearings.Identity.Extensions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
+using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 
 namespace OpenFindBearings.Identity.Controllers
 {

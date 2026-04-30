@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenIddict.Abstractions;
