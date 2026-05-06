@@ -36,7 +36,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OpenIddictApplications",
+                name: "Clients",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -58,26 +58,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OpenIddictApplications", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpenIddictScopes",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyToken = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    Descriptions = table.Column<string>(type: "text", nullable: true),
-                    DisplayName = table.Column<string>(type: "text", nullable: true),
-                    DisplayNames = table.Column<string>(type: "text", nullable: true),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    Properties = table.Column<string>(type: "text", nullable: true),
-                    Resources = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpenIddictScopes", x => x.Id);
+                    table.PrimaryKey("PK_Clients", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -92,6 +73,25 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Roles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Scopes",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyToken = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    Descriptions = table.Column<string>(type: "text", nullable: true),
+                    DisplayName = table.Column<string>(type: "text", nullable: true),
+                    DisplayNames = table.Column<string>(type: "text", nullable: true),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Properties = table.Column<string>(type: "text", nullable: true),
+                    Resources = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Scopes", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -186,7 +186,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OpenIddictAuthorizations",
+                name: "Authorizations",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -201,11 +201,11 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OpenIddictAuthorizations", x => x.Id);
+                    table.PrimaryKey("PK_Authorizations", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_OpenIddictAuthorizations_OpenIddictApplications_Application~",
+                        name: "FK_Authorizations_Clients_ApplicationId",
                         column: x => x.ApplicationId,
-                        principalTable: "OpenIddictApplications",
+                        principalTable: "Clients",
                         principalColumn: "Id");
                 });
 
@@ -316,7 +316,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OpenIddictTokens",
+                name: "Tokens",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -335,16 +335,16 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OpenIddictTokens", x => x.Id);
+                    table.PrimaryKey("PK_Tokens", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_OpenIddictTokens_OpenIddictApplications_ApplicationId",
-                        column: x => x.ApplicationId,
-                        principalTable: "OpenIddictApplications",
+                        name: "FK_Tokens_Authorizations_AuthorizationId",
+                        column: x => x.AuthorizationId,
+                        principalTable: "Authorizations",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_OpenIddictTokens_OpenIddictAuthorizations_AuthorizationId",
-                        column: x => x.AuthorizationId,
-                        principalTable: "OpenIddictAuthorizations",
+                        name: "FK_Tokens_Clients_ApplicationId",
+                        column: x => x.ApplicationId,
+                        principalTable: "Clients",
                         principalColumn: "Id");
                 });
 
@@ -364,36 +364,14 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictApplications_ClientId",
-                table: "OpenIddictApplications",
+                name: "IX_Authorizations_ApplicationId_Status_Subject_Type",
+                table: "Authorizations",
+                columns: new[] { "ApplicationId", "Status", "Subject", "Type" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Clients_ClientId",
+                table: "Clients",
                 column: "ClientId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictAuthorizations_ApplicationId_Status_Subject_Type",
-                table: "OpenIddictAuthorizations",
-                columns: new[] { "ApplicationId", "Status", "Subject", "Type" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictScopes_Name",
-                table: "OpenIddictScopes",
-                column: "Name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictTokens_ApplicationId_Status_Subject_Type",
-                table: "OpenIddictTokens",
-                columns: new[] { "ApplicationId", "Status", "Subject", "Type" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictTokens_AuthorizationId",
-                table: "OpenIddictTokens",
-                column: "AuthorizationId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpenIddictTokens_ReferenceId",
-                table: "OpenIddictTokens",
-                column: "ReferenceId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -408,6 +386,12 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Scopes_Name",
+                table: "Scopes",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_SmsCodes_PhoneNumber",
                 table: "SmsCodes",
                 column: "PhoneNumber");
@@ -416,6 +400,22 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "IX_SystemConfigs_Key",
                 table: "SystemConfigs",
                 column: "Key",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tokens_ApplicationId_Status_Subject_Type",
+                table: "Tokens",
+                columns: new[] { "ApplicationId", "Status", "Subject", "Type" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tokens_AuthorizationId",
+                table: "Tokens",
+                column: "AuthorizationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tokens_ReferenceId",
+                table: "Tokens",
+                column: "ReferenceId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -452,19 +452,19 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "AuditLogs");
 
             migrationBuilder.DropTable(
-                name: "OpenIddictScopes");
-
-            migrationBuilder.DropTable(
-                name: "OpenIddictTokens");
-
-            migrationBuilder.DropTable(
                 name: "RoleClaims");
+
+            migrationBuilder.DropTable(
+                name: "Scopes");
 
             migrationBuilder.DropTable(
                 name: "SmsCodes");
 
             migrationBuilder.DropTable(
                 name: "SystemConfigs");
+
+            migrationBuilder.DropTable(
+                name: "Tokens");
 
             migrationBuilder.DropTable(
                 name: "UserClaims");
@@ -479,7 +479,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "UserTokens");
 
             migrationBuilder.DropTable(
-                name: "OpenIddictAuthorizations");
+                name: "Authorizations");
 
             migrationBuilder.DropTable(
                 name: "Roles");
@@ -488,7 +488,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
                 name: "Users");
 
             migrationBuilder.DropTable(
-                name: "OpenIddictApplications");
+                name: "Clients");
         }
     }
 }

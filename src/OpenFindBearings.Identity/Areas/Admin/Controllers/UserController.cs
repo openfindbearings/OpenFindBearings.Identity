@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenFindBearings.Identity.Areas.Admin.Models.ViewModels;
-using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.Requests;
 using OpenFindBearings.Identity.Models.Enums;
 using OpenFindBearings.Identity.Services.Interfaces;
 

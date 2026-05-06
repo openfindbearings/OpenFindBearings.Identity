@@ -4,8 +4,6 @@ using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Models.ValueObjects;
 using OpenIddict.Abstractions;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace OpenFindBearings.Identity.Data
@@ -71,11 +69,11 @@ namespace OpenFindBearings.Identity.Data
 
             var roles = new[]
             {
-            new IdentityRole<Guid> { Name = "SuperAdmin" },
-            new IdentityRole<Guid> { Name = "Admin" },
-            new IdentityRole<Guid> { Name = "User" },
-            new IdentityRole<Guid> { Name = "TestUser" }
-        };
+                new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "SuperAdmin", NormalizedName = "SUPERADMIN" },
+                new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "Admin", NormalizedName = "ADMIN" },
+                new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "User", NormalizedName = "USER" },
+                new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "TestUser", NormalizedName = "TESTUSER" }
+            };
 
             foreach (var role in roles)
             {
@@ -103,60 +101,98 @@ namespace OpenFindBearings.Identity.Data
             logger.LogInformation("开始初始化用户数据...");
 
             var users = new List<OidcUser>
-        {
-            CreateAdminUser(),
-            CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"),
-            CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"),
-            CreateTestUser("wangwu", "王五", "wangwu@example.com", null),
-            CreateLockedUser(),
-            CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005")
-        };
+            {
+                CreateAdminUser(),
+                CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"),
+                CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"),
+                CreateTestUser("wangwu", "王五", "wangwu@example.com", null),
+                CreateLockedUser(),
+                CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005")
+            };
 
             foreach (var user in users)
             {
-                var password = user.UserName == "admin" ? "Admin@123456" :
-                              user.UserName == "lockeduser" ? "Locked@123456" :
-                              user.UserName == "testuser" ? "Test@123456" : "User@123456";
+                var password = GetUserPassword(user.UserName!);
                 await userManager.CreateAsync(user, password);
+
+                // 对于锁定的用户，创建后立即更新失败计数（因为 CreateAsync 会重置这些值）
+                if (user.UserName == "lockeduser")
+                {
+                    user.RecordFailedLogin(maxAttempts: 5, lockoutMinutes: 15);
+                    await userManager.UpdateAsync(user);
+                }
             }
 
             logger.LogInformation("用户数据初始化完成，共添加 {Count} 个用户", users.Count);
         }
 
         /// <summary>
-        /// 创建管理员用户
+        /// 获取用户密码
         /// </summary>
-        private static OidcUser CreateAdminUser()
+        private static string GetUserPassword(string userName)
         {
-            return new OidcUser
+            return userName switch
             {
-                Id = Guid.NewGuid(),
-                UserName = "admin",
-                Email = "admin@example.com",
-                PhoneNumber = "+8613800000001",
-                EmailConfirmed = true,
-                PhoneNumberConfirmed = true,
-                Name = "系统管理员",
-                GivenName = "管理",
-                FamilyName = "员",
-                PreferredUsername = "admin",
-                IsEnabled = true,
-                CreatedAt = DateTimeOffset.UtcNow,
-                IsActive = true,
-                Address = new Address
-                {
-                    Formatted = "中国北京市朝阳区xxx路1号",
-                    StreetAddress = "xxx路1号",
-                    Locality = "北京市",
-                    Region = "北京市",
-                    PostalCode = "100020",
-                    Country = "中国"
-                }
+                "admin" => "Admin@123456",
+                "lockeduser" => "Locked@123456",
+                "testuser" => "Test@123456",
+                _ => "User@123456"
             };
         }
 
         /// <summary>
-        /// 创建测试用户
+        /// 创建管理员用户（使用工厂方法）
+        /// </summary>
+        private static OidcUser CreateAdminUser()
+        {
+            var user = OidcUser.Create(
+                userName: "admin",
+                email: "admin@example.com",
+                phoneNumber: "+8613800000001",
+                name: "系统管理员",
+                givenName: "管理",
+                familyName: "员");
+
+            // 通过反射设置 Id（仅种子数据场景）
+            SetUserIdViaReflection(user, Guid.NewGuid());
+
+            // 使用 UpdateProfile 设置个人资料（包含 name, givenName, familyName, nickname, pictureUrl, websiteUrl）
+            user.UpdateProfile(
+                name: "系统管理员",
+                givenName: "管理",
+                familyName: "员",
+                nickname: "admin",
+                pictureUrl: "https://example.com/admin-avatar.png",
+                websiteUrl: "https://example.com");
+
+            // 使用单个属性设置方法
+            user.SetPreferredUsername("admin");
+            user.SetProfileUrl("https://example.com/admin-profile");
+            user.SetGender("男");
+            user.SetBirthdate(new DateOnly(1985, 1, 15));
+            user.SetLocale("zh-CN");
+            user.SetZoneInfo("Asia/Shanghai");
+
+            // 更新地址（保留原完整 Address）
+            user.UpdateAddress(new Address
+            {
+                Formatted = "中国北京市朝阳区xxx路1号",
+                StreetAddress = "xxx路1号",
+                Locality = "北京市",
+                Region = "北京市",
+                PostalCode = "100020",
+                Country = "中国"
+            });
+
+            // 确认邮箱和手机
+            user.ConfirmEmail();
+            user.ConfirmPhoneNumber();
+
+            return user;
+        }
+
+        /// <summary>
+        /// 创建测试用户（使用工厂方法）
         /// </summary>
         private static OidcUser CreateTestUser(string username, string name, string email, string? phoneNumber)
         {
@@ -164,37 +200,66 @@ namespace OpenFindBearings.Identity.Data
             var daysAgo = random.Next(5, 31);
             var lastLoginDaysAgo = random.Next(1, 10);
 
-            return new OidcUser
+            // 提取 GivenName 和 FamilyName
+            string givenName = name.Length > 1 ? name.Substring(1) : name;
+            string familyName = name.Length > 0 ? name.Substring(0, 1) : "用";
+            string nickname = $"小{familyName}";
+
+            var user = OidcUser.Create(
+                userName: username,
+                email: email,
+                phoneNumber: phoneNumber,
+                name: name,
+                givenName: givenName,
+                familyName: familyName);
+
+            SetUserIdViaReflection(user, Guid.NewGuid());
+
+            // 使用 UpdateProfile 设置昵称
+            user.UpdateProfile(
+                name: name,
+                givenName: givenName,
+                familyName: familyName,
+                nickname: nickname,
+                pictureUrl: null,
+                websiteUrl: null);
+
+            // 使用业务方法设置额外属性
+            user.SetPreferredUsername(username);
+            user.SetLocale("zh-CN");
+            user.SetZoneInfo("Asia/Shanghai");
+
+            // 更新地址
+            user.UpdateAddress(new Address
             {
-                Id = Guid.NewGuid(),
-                UserName = username,
-                Email = email,
-                PhoneNumber = phoneNumber,
-                EmailConfirmed = true,
-                PhoneNumberConfirmed = phoneNumber != null,
-                Name = name,
-                GivenName = name.Length > 1 ? name.Substring(1) : name,
-                FamilyName = name.Substring(0, 1),
-                Nickname = $"小{name.Substring(0, 1)}",
-                PreferredUsername = username,
-                IsEnabled = true,
-                CreatedAt = DateTimeOffset.UtcNow.AddDays(-daysAgo),
-                LastLoginAt = DateTimeOffset.UtcNow.AddDays(-lastLoginDaysAgo),
-                LastLoginIp = $"192.168.1.{random.Next(10, 200)}",
-                LastLoginDevice = GetRandomDevice(),
-                IsActive = true,
-                Address = new Address
-                {
-                    Formatted = $"中国某某市测试路{random.Next(1, 100)}号",
-                    StreetAddress = $"测试路{random.Next(1, 100)}号",
-                    Locality = "测试市",
-                    Region = "测试省",
-                    PostalCode = random.Next(100000, 999999).ToString(),
-                    Country = "中国"
-                },
-                Locale = "zh-CN",
-                ZoneInfo = "Asia/Shanghai"
-            };
+                Formatted = $"中国某某市测试路{random.Next(1, 100)}号",
+                StreetAddress = $"测试路{random.Next(1, 100)}号",
+                Locality = "测试市",
+                Region = "测试省",
+                PostalCode = random.Next(100000, 999999).ToString(),
+                Country = "中国"
+            });
+
+            // 通过反射设置 CreatedAt（仅种子数据场景）
+            SetCreatedAtViaReflection(user, DateTimeOffset.UtcNow.AddDays(-daysAgo));
+
+            // 记录登录成功
+            user.RecordSuccessfulLogin(
+                ip: $"192.168.1.{random.Next(10, 200)}",
+                device: GetRandomDevice(),
+                location: "中国");
+
+            // 覆盖 LastLoginAt 为随机天数前
+            SetLastLoginAtViaReflection(user, DateTimeOffset.UtcNow.AddDays(-lastLoginDaysAgo));
+
+            // 确认邮箱
+            user.ConfirmEmail();
+            if (phoneNumber != null)
+            {
+                user.ConfirmPhoneNumber();
+            }
+
+            return user;
         }
 
         /// <summary>
@@ -202,22 +267,65 @@ namespace OpenFindBearings.Identity.Data
         /// </summary>
         private static OidcUser CreateLockedUser()
         {
-            return new OidcUser
+            var user = OidcUser.Create(
+                userName: "lockeduser",
+                email: "locked@example.com",
+                phoneNumber: "+8613800000004",
+                name: "锁定用户",
+                givenName: "锁定",
+                familyName: "用户");
+
+            SetUserIdViaReflection(user, Guid.NewGuid());
+            SetCreatedAtViaReflection(user, DateTimeOffset.UtcNow.AddDays(-5));
+
+            // 禁用账户
+            user.Disable();
+
+            // 模拟5次失败登录
+            for (int i = 0; i < 5; i++)
             {
-                Id = Guid.NewGuid(),
-                UserName = "lockeduser",
-                Email = "locked@example.com",
-                PhoneNumber = "+8613800000004",
-                EmailConfirmed = false,
-                PhoneNumberConfirmed = false,
-                Name = "锁定用户",
-                IsEnabled = false,
-                CreatedAt = DateTimeOffset.UtcNow.AddDays(-5),
-                IsActive = true,
-                LockoutEnabled = true,
-                LockoutEnd = DateTimeOffset.UtcNow.AddDays(1),
-                AccessFailedCount = 5
-            };
+                user.RecordFailedLogin();
+            }
+
+            return user;
+        }
+
+        /// <summary>
+        /// 通过反射设置用户 Id（仅用于种子数据）
+        /// </summary>
+        private static void SetUserIdViaReflection(OidcUser user, Guid id)
+        {
+            var property = typeof(OidcUser).GetProperty("Id");
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(user, id);
+            }
+        }
+
+        /// <summary>
+        /// 通过反射设置 CreatedAt（仅用于种子数据）
+        /// </summary>
+        private static void SetCreatedAtViaReflection(OidcUser user, DateTimeOffset createdAt)
+        {
+            var field = typeof(OidcUser).GetField("<CreatedAt>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (field != null)
+            {
+                field.SetValue(user, createdAt);
+            }
+        }
+
+        /// <summary>
+        /// 通过反射设置 LastLoginAt（仅用于种子数据）
+        /// </summary>
+        private static void SetLastLoginAtViaReflection(OidcUser user, DateTimeOffset? lastLoginAt)
+        {
+            var field = typeof(OidcUser).GetField("<LastLoginAt>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (field != null)
+            {
+                field.SetValue(user, lastLoginAt);
+            }
         }
 
         /// <summary>
@@ -225,7 +333,7 @@ namespace OpenFindBearings.Identity.Data
         /// </summary>
         private static string GetRandomDevice()
         {
-            var devices = new[] { "Web", "iOS", "Android", "WeChat" };
+            var devices = new[] { "Web - Chrome", "iOS - Safari", "Android - Chrome", "WeChat" };
             return devices[Random.Shared.Next(devices.Length)];
         }
 
@@ -325,7 +433,7 @@ namespace OpenFindBearings.Identity.Data
                         Permissions.Scopes.Profile,
                         Permissions.Scopes.Email,
                         Permissions.Scopes.Roles,
-                        Permissions.Prefixes.Scope + "api:sync"
+                        Permissions.Prefixes.Scope + "api:maui"
                     }
                 });
                 logger.LogInformation("创建 MAUI 客户端成功");
@@ -351,7 +459,11 @@ namespace OpenFindBearings.Identity.Data
                         Permissions.Scopes.Email,
                         Permissions.Scopes.Roles,
                         Permissions.ResponseTypes.Code,
-                        Permissions.Prefixes.Scope + "api:sync"
+                        Permissions.Prefixes.Scope + "api:web"
+                    },
+                    Requirements =
+                    {
+                        Requirements.Features.ProofKeyForCodeExchange
                     }
                 });
                 logger.LogInformation("创建 Web 客户端成功");
@@ -363,18 +475,38 @@ namespace OpenFindBearings.Identity.Data
         /// </summary>
         private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ILogger logger)
         {
-            var scopes = new[] { "openid", "profile", "email", "phone", "address", "roles" };
-            foreach (var scopeName in scopes)
+            //var scopes = new[] { "openid", "profile", "email", "phone", "address", "roles" };
+            //foreach (var scopeName in scopes)
+            //{
+            //    if (await scopeManager.FindByNameAsync(scopeName) == null)
+            //    {
+            //        await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+            //        {
+            //            Name = scopeName,
+            //            DisplayName = $"{scopeName} scope",
+            //            Description = $"Standard OIDC scope: {scopeName}"
+            //        });
+            //        logger.LogInformation("创建 Scope [{ScopeName}] 成功", scopeName);
+            //    }
+            //}
+            if (await scopeManager.FindByNameAsync("api:sync") is null)
             {
-                if (await scopeManager.FindByNameAsync(scopeName) == null)
+                try
                 {
                     await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
                     {
-                        Name = scopeName,
-                        DisplayName = $"{scopeName} scope",
-                        Description = $"Standard OIDC scope: {scopeName}"
+                        Name = "api:sync",
+                        Resources =
+                        {
+                           ApiResourceConstants.BaseApi
+                        }
                     });
-                    logger.LogInformation("创建 Scope [{ScopeName}] 成功", scopeName);
+
+                    logger.LogInformation("创建Scope[api:sync]成功");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"创建Scope[api:sync]失败，详细：{ex.Message}");
                 }
             }
         }

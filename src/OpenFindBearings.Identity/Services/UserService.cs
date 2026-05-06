@@ -5,6 +5,7 @@ using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Models.Enums;
 using OpenFindBearings.Identity.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using OpenFindBearings.Identity.Models.DTOs.Requests;
 
 namespace OpenFindBearings.Identity.Services
 {
@@ -102,18 +103,32 @@ namespace OpenFindBearings.Identity.Services
         /// <inheritdoc/>
         public async Task<ServiceResult<UserDto>> CreateAsync(CreateUserRequest request, CancellationToken ct = default)
         {
-            var user = new OidcUser
+            //var user = new OidcUser
+            //{
+            //    UserName = request.UserName,
+            //    Email = request.Email,
+            //    PhoneNumber = request.PhoneNumber,
+            //    Name = request.Name,
+            //    GivenName = request.GivenName,
+            //    FamilyName = request.FamilyName,
+            //    Nickname = request.Nickname,
+            //    IsEnabled = true,
+            //    CreatedAt = DateTimeOffset.UtcNow
+            //};
+
+            var user = OidcUser.Create(
+                userName: request.UserName,
+                email: request.Email,
+                phoneNumber: request.PhoneNumber,
+                name: request.Name,
+                givenName: request.GivenName,
+                familyName: request.FamilyName);
+
+            // 然后再用业务方法设置其他属性
+            if (!string.IsNullOrEmpty(request.Nickname))
             {
-                UserName = request.UserName,
-                Email = request.Email,
-                PhoneNumber = request.PhoneNumber,
-                Name = request.Name,
-                GivenName = request.GivenName,
-                FamilyName = request.FamilyName,
-                Nickname = request.Nickname,
-                IsEnabled = true,
-                CreatedAt = DateTimeOffset.UtcNow
-            };
+                user.UpdateProfile(nickname: request.Nickname);
+            }
 
             var result = await _userManager.CreateAsync(user, request.Password);
             if (!result.Succeeded)

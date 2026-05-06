@@ -1,5 +1,6 @@
 ﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.Requests;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace OpenFindBearings.Identity.Models.DTOs
+namespace OpenFindBearings.Identity.Models.DTOs.Requests
 {
     /// <summary>
     /// 创建角色请求

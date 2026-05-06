@@ -1,5 +1,6 @@
 ﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.Requests;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 
@@ -32,22 +33,24 @@ namespace OpenFindBearings.Identity.Services
         /// <inheritdoc/>
         public async Task<PaginatedResult<ScopeDto>> GetPagedAsync(int page, int size, string? search = null, CancellationToken ct = default)
         {
-            // 修复：ListAsync() 不带 CancellationToken 参数
             var scopes = new List<ScopeDto>();
             await foreach (var scope in _scopeManager.ListAsync())
             {
-                var name = await _scopeManager.GetNameAsync(scope, ct);
-                var displayName = await _scopeManager.GetDisplayNameAsync(scope, ct);
+                var name = await _scopeManager.GetNameAsync(scope, ct) ?? string.Empty;
+                var displayName = await _scopeManager.GetDisplayNameAsync(scope, ct) ?? string.Empty;
                 var description = await _scopeManager.GetDescriptionAsync(scope, ct);
+                var resources = await _scopeManager.GetResourcesAsync(scope, ct);
+                var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
 
-                if (!string.IsNullOrEmpty(search) && !name!.Contains(search) && !displayName!.Contains(search))
+                if (!string.IsNullOrEmpty(search) && !name.Contains(search) && !displayName.Contains(search))
                     continue;
 
                 scopes.Add(new ScopeDto
                 {
-                    Name = name!,
-                    DisplayName = displayName!,
-                    Description = description
+                    Name = name,
+                    DisplayName = displayName,
+                    Description = description,
+                    Resources = resourcesList
                 });
             }
 
@@ -63,26 +66,33 @@ namespace OpenFindBearings.Identity.Services
             var scope = await _scopeManager.FindByNameAsync(name, ct);
             if (scope == null) return null;
 
+            var resources = await _scopeManager.GetResourcesAsync(scope, ct);
+            var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
+
             return new ScopeDto
             {
                 Name = await _scopeManager.GetNameAsync(scope, ct) ?? string.Empty,
                 DisplayName = await _scopeManager.GetDisplayNameAsync(scope, ct) ?? string.Empty,
-                Description = await _scopeManager.GetDescriptionAsync(scope, ct) ?? string.Empty
+                Description = await _scopeManager.GetDescriptionAsync(scope, ct),
+                Resources = resourcesList
             };
         }
 
         /// <inheritdoc/>
         public async Task<IReadOnlyList<ScopeDto>> GetAllAsync(CancellationToken ct = default)
         {
-            // 修复：ListAsync() 不带 CancellationToken 参数
             var scopes = new List<ScopeDto>();
             await foreach (var scope in _scopeManager.ListAsync())
             {
+                var resources = await _scopeManager.GetResourcesAsync(scope, ct);
+                var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
+
                 scopes.Add(new ScopeDto
                 {
                     Name = await _scopeManager.GetNameAsync(scope, ct) ?? string.Empty,
                     DisplayName = await _scopeManager.GetDisplayNameAsync(scope, ct) ?? string.Empty,
-                    Description = await _scopeManager.GetDescriptionAsync(scope, ct) ?? string.Empty
+                    Description = await _scopeManager.GetDescriptionAsync(scope, ct),
+                    Resources = resourcesList
                 });
             }
             return scopes.OrderBy(s => s.Name).ToList();
@@ -120,7 +130,8 @@ namespace OpenFindBearings.Identity.Services
             {
                 Name = request.Name,
                 DisplayName = request.DisplayName ?? request.Name,
-                Description = request.Description
+                Description = request.Description,
+                Resources = request.Resources ?? new List<string>()
             });
         }
 
@@ -141,8 +152,8 @@ namespace OpenFindBearings.Identity.Services
             };
 
             // 复制现有资源
-            var resources = await _scopeManager.GetResourcesAsync(scope, ct);
-            foreach (var resource in resources)
+            var existingResources = await _scopeManager.GetResourcesAsync(scope, ct);
+            foreach (var resource in existingResources)
             {
                 descriptor.Resources.Add(resource);
             }

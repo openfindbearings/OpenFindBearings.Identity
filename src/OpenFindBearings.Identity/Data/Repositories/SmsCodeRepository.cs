@@ -11,12 +11,10 @@ namespace OpenFindBearings.Identity.Data.Repositories
     public class SmsCodeRepository : ISmsCodeRepository
     {
         private readonly ApplicationDbContext _context;
-        private readonly DbSet<SmsCode> _dbSet;
 
         public SmsCodeRepository(ApplicationDbContext context)
         {
             _context = context;
-            _dbSet = context.Set<SmsCode>();
         }
 
         // ========== 添加 ==========
@@ -31,19 +29,19 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task AddAsync(SmsCode smsCode, CancellationToken cancellationToken = default)
         {
-            await _dbSet.AddAsync(smsCode, cancellationToken);
+            await _context.SmsCodes.AddAsync(smsCode, cancellationToken);
         }
 
         // ========== 查询 ==========
 
         public async Task<SmsCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            return await _dbSet.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return await _context.SmsCodes.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         }
 
         public async Task<SmsCode?> GetByCodeAsync(string phoneNumber, string code, string type, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.SmsCodes
                 .FirstOrDefaultAsync(x => x.PhoneNumber == phoneNumber
                     && x.Code == code
                     && x.Type == type
@@ -52,7 +50,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task<SmsCode?> GetLatestValidCodeAsync(string phoneNumber, string type, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.SmsCodes
                 .Where(x => x.PhoneNumber == phoneNumber
                     && x.Type == type
                     && x.IsActive
@@ -64,7 +62,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task<DateTimeOffset?> GetLastSendTimeAsync(string phoneNumber, string type, CancellationToken cancellationToken = default)
         {
-            var lastCode = await _dbSet
+            var lastCode = await _context.SmsCodes
                 .Where(x => x.PhoneNumber == phoneNumber
                     && x.Type == type
                     && x.IsActive)
@@ -79,7 +77,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
             var today = DateTimeOffset.UtcNow.Date;
             var tomorrow = today.AddDays(1);
 
-            return await _dbSet
+            return await _context.SmsCodes
                 .Where(x => x.PhoneNumber == phoneNumber
                     && x.CreatedAt >= today
                     && x.CreatedAt < tomorrow
@@ -111,7 +109,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task InvalidateAllCodesAsync(string phoneNumber, string type, CancellationToken cancellationToken = default)
         {
-            var codes = await _dbSet
+            var codes = await _context.SmsCodes
                 .Where(x => x.PhoneNumber == phoneNumber
                     && x.Type == type
                     && !x.IsUsed
@@ -136,7 +134,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task<int> CleanExpiredCodesAsync(CancellationToken cancellationToken = default)
         {
-            var expiredCodes = await _dbSet
+            var expiredCodes = await _context.SmsCodes
                 .Where(x => x.IsActive && x.ExpiresAt <= DateTimeOffset.UtcNow)
                 .ToListAsync(cancellationToken);
 
@@ -152,7 +150,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task HardDeleteAsync(SmsCode smsCode, CancellationToken cancellationToken = default)
         {
-            _dbSet.Remove(smsCode);
+            _context.SmsCodes.Remove(smsCode);
             await _context.SaveChangesAsync(cancellationToken);
         }
     }

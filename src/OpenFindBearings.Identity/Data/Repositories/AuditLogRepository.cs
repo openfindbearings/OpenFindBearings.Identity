@@ -10,12 +10,10 @@ namespace OpenFindBearings.Identity.Data.Repositories
     public class AuditLogRepository : IAuditLogRepository
     {
         private readonly ApplicationDbContext _context;
-        private readonly DbSet<AuditLog> _dbSet;
 
         public AuditLogRepository(ApplicationDbContext context)
         {
             _context = context;
-            _dbSet = context.Set<AuditLog>();
         }
 
         // ========== 添加 ==========
@@ -25,8 +23,8 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task AddAsync(AuditLog log, CancellationToken cancellationToken = default)
         {
-            log.CreatedAt = DateTimeOffset.UtcNow;
-            await _dbSet.AddAsync(log, cancellationToken);
+            //log.CreatedAt = DateTimeOffset.UtcNow;
+            await _context.AuditLogs.AddAsync(log, cancellationToken);
         }
 
         /// <summary>
@@ -34,12 +32,12 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task AddRangeAsync(IEnumerable<AuditLog> logs, CancellationToken cancellationToken = default)
         {
-            var list = logs.ToList();
-            foreach (var log in list)
-            {
-                log.CreatedAt = DateTimeOffset.UtcNow;
-            }
-            await _dbSet.AddRangeAsync(list, cancellationToken);
+            //var list = logs.ToList();
+            //foreach (var log in list)
+            //{
+            //    log.CreatedAt = DateTimeOffset.UtcNow;
+            //}
+            await _context.AuditLogs.AddRangeAsync(logs, cancellationToken);
         }
 
         // ========== 查询 ==========
@@ -49,7 +47,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<AuditLog?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            return await _dbSet.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+            return await _context.AuditLogs.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         }
 
         /// <summary>
@@ -57,7 +55,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetAllAsync(int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
                 .Take(take)
@@ -69,7 +67,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<int> GetCountAsync(CancellationToken cancellationToken = default)
         {
-            return await _dbSet.CountAsync(cancellationToken);
+            return await _context.AuditLogs.CountAsync(cancellationToken);
         }
 
         /// <summary>
@@ -77,7 +75,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByUserIdAsync(Guid userId, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.UserId == userId)
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
@@ -90,7 +88,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByActionAsync(string action, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.Action == action)
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
@@ -103,7 +101,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByResourceTypeAsync(string resourceType, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.ResourceType == resourceType)
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
@@ -116,7 +114,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByStatusAsync(string status, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.Status == status)
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
@@ -129,7 +127,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByDateRangeAsync(DateTimeOffset start, DateTimeOffset end, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.CreatedAt >= start && l.CreatedAt <= end)
                 .OrderByDescending(l => l.CreatedAt)
                 .Skip(skip)
@@ -145,7 +143,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
             var today = DateTimeOffset.UtcNow.Date;
             var tomorrow = today.AddDays(1);
 
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.CreatedAt >= today && l.CreatedAt < tomorrow)
                 .CountAsync(cancellationToken);
         }
@@ -155,7 +153,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetRecentByUserIdAsync(Guid userId, int take = 10, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.UserId == userId)
                 .OrderByDescending(l => l.CreatedAt)
                 .Take(take)
@@ -167,7 +165,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetRecentFailedAsync(int take = 20, CancellationToken cancellationToken = default)
         {
-            return await _dbSet
+            return await _context.AuditLogs
                 .Where(l => l.Status == "Failed")
                 .OrderByDescending(l => l.CreatedAt)
                 .Take(take)

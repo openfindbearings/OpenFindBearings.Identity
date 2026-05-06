@@ -1,4 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.Requests;
 using OpenFindBearings.Identity.Models.Enums;
 
 namespace OpenFindBearings.Identity.Services.Interfaces

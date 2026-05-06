@@ -1,4 +1,4 @@
-﻿namespace OpenFindBearings.Identity.Models.DTOs
+﻿namespace OpenFindBearings.Identity.Models.DTOs.Requests
 {
     /// <summary>
     /// 更新用户请求

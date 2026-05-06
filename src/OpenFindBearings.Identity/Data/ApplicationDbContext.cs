@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace OpenFindBearings.Identity.Data
 {
@@ -11,11 +12,32 @@ namespace OpenFindBearings.Identity.Data
         public DbSet<SmsCode> SmsCodes { get; set; } = default!;
         public DbSet<SystemConfig> SystemConfigs { get; set; } = default!;
 
+        //// OpenIddict 表
+        //public DbSet<OpenIddictEntityFrameworkCoreApplication> Applications { get; set; } = default!;
+        //public DbSet<OpenIddictEntityFrameworkCoreAuthorization> Authorizations { get; set; } = default!;
+        //public DbSet<OpenIddictEntityFrameworkCoreScope> Scopes { get; set; } = default!;
+        //public DbSet<OpenIddictEntityFrameworkCoreToken> Tokens { get; set; } = default!;
+
+        //// Identity 表
+        //public DbSet<OidcUser> Users { get; set; } = default!;
+        //public DbSet<IdentityRole<Guid>> Roles { get; set; } = default!;
+        //public DbSet<IdentityUserRole<Guid>> UserRoles { get; set; } = default!;
+        //public DbSet<IdentityUserClaim<Guid>> UserClaims { get; set; } = default!;
+        //public DbSet<IdentityUserLogin<Guid>> UserLogins { get; set; } = default!;
+        //public DbSet<IdentityUserToken<Guid>> UserTokens { get; set; } = default!;
+        //public DbSet<IdentityRoleClaim<Guid>> RoleClaims { get; set; } = default!;
+
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            // OpenIddict 表重命名
+            builder.Entity<OpenIddictEntityFrameworkCoreApplication>(e => e.ToTable("Clients"));
+            builder.Entity<OpenIddictEntityFrameworkCoreAuthorization>(e => e.ToTable("Authorizations"));
+            builder.Entity<OpenIddictEntityFrameworkCoreScope>(e => e.ToTable("Scopes"));
+            builder.Entity<OpenIddictEntityFrameworkCoreToken>(e => e.ToTable("Tokens"));
 
             // Identity 表重命名
             builder.Entity<OidcUser>(e => e.ToTable("Users"));
