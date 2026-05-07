@@ -28,7 +28,7 @@ namespace OpenFindBearings.Identity.Models.Entities
         /// <returns>新创建的用户实体</returns>
         public static OidcUser Create(
             string userName,
-            string email,
+            string? email,
             string? phoneNumber = null,
             string? name = null,
             string? givenName = null,
@@ -37,8 +37,8 @@ namespace OpenFindBearings.Identity.Models.Entities
             if (string.IsNullOrWhiteSpace(userName))
                 throw new ArgumentException("用户名不能为空", nameof(userName));
 
-            if (string.IsNullOrWhiteSpace(email))
-                throw new ArgumentException("邮箱不能为空", nameof(email));
+            //if (string.IsNullOrWhiteSpace(email))
+            //    throw new ArgumentException("邮箱不能为空", nameof(email));
 
             return new OidcUser
             {
@@ -340,7 +340,12 @@ namespace OpenFindBearings.Identity.Models.Entities
             string? familyName = null,
             string? nickname = null,
             string? pictureUrl = null,
-            string? websiteUrl = null)
+            string? websiteUrl = null,
+            string? gender = null,
+            DateOnly? birthdate = null,
+            string? locale = null,
+            string? zoneInfo = null,
+            Address? address = null)
         {
             Name = name ?? Name;
             GivenName = givenName ?? GivenName;
@@ -348,6 +353,15 @@ namespace OpenFindBearings.Identity.Models.Entities
             Nickname = nickname ?? Nickname;
             PictureUrl = pictureUrl ?? PictureUrl;
             WebsiteUrl = websiteUrl ?? WebsiteUrl;
+
+            Gender = gender ?? Gender;
+            Birthdate = birthdate ?? Birthdate;
+            Locale = locale ?? Locale;
+            ZoneInfo = zoneInfo ?? ZoneInfo;
+
+            if (address != null)
+                Address = address;
+
             UpdatedAt = DateTimeOffset.UtcNow;
         }
 

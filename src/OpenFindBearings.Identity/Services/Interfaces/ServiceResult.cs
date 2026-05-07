@@ -6,17 +6,23 @@
     public class ServiceResult
     {
         public bool IsSuccess { get; }
-        public string[] Errors { get; }
+        public ServiceError[] Errors { get; }
 
-        protected ServiceResult(bool isSuccess, string[] errors)
+        protected ServiceResult(bool isSuccess, ServiceError[] errors)
         {
             IsSuccess = isSuccess;
-            Errors = errors ?? Array.Empty<string>();
+            Errors = errors ?? [];
         }
 
-        public static ServiceResult Success() => new(true, Array.Empty<string>());
-        public static ServiceResult Failure(string error) => new(false, new[] { error });
-        public static ServiceResult Failure(string[] errors) => new(false, errors);
+        public static ServiceResult Success() => new(true, []);
+        public static ServiceResult Failure(ServiceError error) => new(false, [error]);
+        public static ServiceResult Failure(ServiceError[] errors) => new(false, errors);
+    }
+
+    public class ServiceError
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -26,13 +32,13 @@
     {
         public T? Data { get; }
 
-        private ServiceResult(bool isSuccess, string[] errors, T? data) : base(isSuccess, errors)
+        private ServiceResult(bool isSuccess, ServiceError[] errors, T? data) : base(isSuccess, errors)
         {
             Data = data;
         }
 
-        public static ServiceResult<T> Success(T data) => new(true, Array.Empty<string>(), data);
-        public new static ServiceResult<T> Failure(string error) => new(false, new[] { error }, default);
-        public new static ServiceResult<T> Failure(string[] errors) => new(false, errors, default);
+        public static ServiceResult<T> Success(T data) => new(true, [], data);
+        public new static ServiceResult<T> Failure(ServiceError error) => new(false, [error], default);
+        public new static ServiceResult<T> Failure(ServiceError[] errors) => new(false, errors, default);
     }
 }

@@ -1,5 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
-using OpenFindBearings.Identity.Models.DTOs.Requests;
+using OpenFindBearings.Identity.Models.DTOs.User;
 using OpenFindBearings.Identity.Models.Enums;
 
 namespace OpenFindBearings.Identity.Services.Interfaces
@@ -14,12 +14,7 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 分页获取用户列表
         /// </summary>
-        /// <param name="page">页码（从1开始）</param>
-        /// <param name="size">每页大小</param>
-        /// <param name="search">搜索关键词（用户名/邮箱/姓名）</param>
-        /// <param name="status">状态筛选</param>
-        /// <param name="ct">取消令牌</param>
-        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, CancellationToken ct = default);
+        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
 
         /// <summary>
         /// 根据 ID 获取用户
@@ -37,6 +32,11 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<UserDto?> GetByEmailAsync(string email, CancellationToken ct = default);
 
         /// <summary>
+        /// 根据手机号获取用户
+        /// </summary>
+        Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, CancellationToken ct = default);
+
+        /// <summary>
         /// 获取用户总数
         /// </summary>
         Task<int> GetCountAsync(CancellationToken ct = default);
@@ -46,12 +46,12 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 创建新用户
         /// </summary>
-        Task<ServiceResult<UserDto>> CreateAsync(CreateUserRequest request, CancellationToken ct = default);
+        Task<ServiceResult<UserDto>> CreateAsync(CreateUserDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 更新用户信息
         /// </summary>
-        Task<ServiceResult> UpdateAsync(Guid id, UpdateUserRequest request, CancellationToken ct = default);
+        Task<ServiceResult> UpdateAsync(Guid id, UpdateUserDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 软删除用户

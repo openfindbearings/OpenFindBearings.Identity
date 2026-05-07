@@ -1,4 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.AuditLog;
 
 namespace OpenFindBearings.Identity.Services.Interfaces
 {

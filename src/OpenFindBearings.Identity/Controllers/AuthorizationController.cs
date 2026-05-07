@@ -234,8 +234,6 @@ namespace OpenFindBearings.Identity.Controllers
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        #endregion
-
         #region 待实现授权类型
 
         private async Task<IActionResult> HandleSmsCodeAsync(OpenIddictRequest request)
@@ -261,6 +259,8 @@ namespace OpenFindBearings.Identity.Controllers
             _logger.LogWarning("生物识别授权尚未实现");
             throw new NotImplementedException("Biometric grant type is not implemented yet.");
         }
+
+        #endregion
 
         #endregion
 

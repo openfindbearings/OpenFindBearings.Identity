@@ -1,4 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.SystemConfig;
 
 namespace OpenFindBearings.Identity.Services.Interfaces
 {
@@ -13,14 +14,12 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<T?> GetValueAsync<T>(string key, CancellationToken ct = default);
 
         /// <summary>
-        /// 设置配置值
-        /// </summary>
-        Task SetValueAsync<T>(string key, T value, string? description = null, CancellationToken ct = default);
-
-        /// <summary>
         /// 分页获取所有配置
         /// </summary>
         Task<PaginatedResult<SystemConfigDto>> GetPagedAsync(int page, int size, CancellationToken ct = default);
+
+        // ISystemConfigService.cs 中添加
+        Task<Dictionary<string, object>> GetAllAsDictionaryAsync(CancellationToken ct = default);
 
         /// <summary>
         /// 删除配置
@@ -31,5 +30,20 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// 检查配置是否存在
         /// </summary>
         Task<bool> ExistsAsync(string key, CancellationToken ct = default);
+
+        /// <summary>
+        /// 获取配置描述
+        /// </summary>
+        Task<string?> GetDescriptionAsync(string key, CancellationToken ct = default);
+
+        /// <summary>
+        /// 设置配置值
+        /// </summary>
+        Task SetValueAsync<T>(string key, T value, string? description = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// 更新配置描述
+        /// </summary>
+        Task UpdateDescriptionAsync(string key, string? description, CancellationToken ct = default);
     }
 }

@@ -1,6 +1,6 @@
 ﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.DTOs;
-using OpenFindBearings.Identity.Models.DTOs.Requests;
+using OpenFindBearings.Identity.Models.DTOs.Client;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -69,12 +69,19 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
-        public async Task<ServiceResult<ClientDto>> CreateAsync(CreateClientRequest request, CancellationToken ct = default)
+        public async Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, CancellationToken ct = default)
         {
             var existing = await _applicationManager.FindByClientIdAsync(request.ClientId, ct);
             if (existing != null)
             {
-                return ServiceResult<ClientDto>.Failure($"客户端 '{request.ClientId}' 已存在");
+                return ServiceResult<ClientDto>.Failure(new[]
+                 {
+                    new ServiceError
+                    {
+                        Code = "ClientAlreadyExists",
+                        Description = $"客户端 '{request.ClientId}' 已存在"
+                    }
+                });
             }
 
             var descriptor = new OpenIddictApplicationDescriptor
@@ -118,12 +125,19 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
-        public async Task<ServiceResult> UpdateAsync(string clientId, UpdateClientRequest request, CancellationToken ct = default)
+        public async Task<ServiceResult> UpdateAsync(string clientId, UpdateClientDto request, CancellationToken ct = default)
         {
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
             if (app == null)
             {
-                return ServiceResult.Failure($"客户端 '{clientId}' 不存在");
+                return ServiceResult.Failure(new[]
+              {
+                    new ServiceError
+                    {
+                        Code = "ClientNotFound",
+                        Description = $"客户端 '{clientId}' 不存在"
+                    }
+                });
             }
 
             // OpenIddict 更新使用 descriptor
@@ -152,7 +166,14 @@ namespace OpenFindBearings.Identity.Services
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
             if (app == null)
             {
-                return ServiceResult.Failure($"客户端 '{clientId}' 不存在");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "ClientNotFound",
+                        Description = $"客户端 '{clientId}' 不存在"
+                    }
+                });
             }
 
             await _applicationManager.DeleteAsync(app, ct);
@@ -167,7 +188,14 @@ namespace OpenFindBearings.Identity.Services
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
             if (app == null)
             {
-                return ServiceResult<string>.Failure($"客户端 '{clientId}' 不存在");
+                return ServiceResult<string>.Failure(new[]
+                 {
+                    new ServiceError
+                    {
+                        Code = "ClientNotFound",
+                        Description = $"客户端 '{clientId}' 不存在"
+                    }
+                });
             }
 
             var newSecret = Guid.NewGuid().ToString("N");

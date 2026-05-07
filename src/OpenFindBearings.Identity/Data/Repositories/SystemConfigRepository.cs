@@ -58,5 +58,10 @@ namespace OpenFindBearings.Identity.Data.Repositories
         {
             return await _context.SystemConfigs.AnyAsync(x => x.Key == key, ct);
         }
+
+        public async Task<int> SaveChangesAsync(CancellationToken ct = default)
+        {
+            return await _context.SaveChangesAsync(ct);
+        }
     }
 }

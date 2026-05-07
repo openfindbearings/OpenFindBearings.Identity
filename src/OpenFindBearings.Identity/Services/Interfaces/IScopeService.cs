@@ -1,5 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
-using OpenFindBearings.Identity.Models.DTOs.Requests;
+using OpenFindBearings.Identity.Models.DTOs.Scope;
 
 namespace OpenFindBearings.Identity.Services.Interfaces
 {
@@ -26,12 +26,12 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 创建新 Scope
         /// </summary>
-        Task<ServiceResult<ScopeDto>> CreateAsync(CreateScopeRequest request, CancellationToken ct = default);
+        Task<ServiceResult<ScopeDto>> CreateAsync(CreateScopeDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 更新 Scope
         /// </summary>
-        Task<ServiceResult> UpdateAsync(string name, UpdateScopeRequest request, CancellationToken ct = default);
+        Task<ServiceResult> UpdateAsync(string name, UpdateScopeDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 删除 Scope

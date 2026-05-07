@@ -1,6 +1,6 @@
 ﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.DTOs;
-using OpenFindBearings.Identity.Models.DTOs.Requests;
+using OpenFindBearings.Identity.Models.DTOs.Scope;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 
@@ -17,10 +17,10 @@ namespace OpenFindBearings.Identity.Services
         /// <summary>
         /// 标准 OIDC Scope 列表（不可删除）
         /// </summary>
-        private static readonly HashSet<string> _standardScopes = new()
-        {
+        private static readonly HashSet<string> _standardScopes =
+        [
             "openid", "profile", "email", "phone", "address", "roles"
-        };
+        ];
 
         public ScopeService(
             IOpenIddictScopeManager scopeManager,
@@ -40,7 +40,7 @@ namespace OpenFindBearings.Identity.Services
                 var displayName = await _scopeManager.GetDisplayNameAsync(scope, ct) ?? string.Empty;
                 var description = await _scopeManager.GetDescriptionAsync(scope, ct);
                 var resources = await _scopeManager.GetResourcesAsync(scope, ct);
-                var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
+                var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : [];
 
                 if (!string.IsNullOrEmpty(search) && !name.Contains(search) && !displayName.Contains(search))
                     continue;
@@ -67,7 +67,7 @@ namespace OpenFindBearings.Identity.Services
             if (scope == null) return null;
 
             var resources = await _scopeManager.GetResourcesAsync(scope, ct);
-            var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
+            var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : [];
 
             return new ScopeDto
             {
@@ -85,7 +85,7 @@ namespace OpenFindBearings.Identity.Services
             await foreach (var scope in _scopeManager.ListAsync())
             {
                 var resources = await _scopeManager.GetResourcesAsync(scope, ct);
-                var resourcesList = resources.Any() ? resources.Select(r => r.ToString()).ToList() : new List<string>();
+                var resourcesList = resources.Any() ? [.. resources.Select(r => r.ToString())] : new List<string>();
 
                 scopes.Add(new ScopeDto
                 {
@@ -99,12 +99,19 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
-        public async Task<ServiceResult<ScopeDto>> CreateAsync(CreateScopeRequest request, CancellationToken ct = default)
+        public async Task<ServiceResult<ScopeDto>> CreateAsync(CreateScopeDto request, CancellationToken ct = default)
         {
             var existing = await _scopeManager.FindByNameAsync(request.Name, ct);
             if (existing != null)
             {
-                return ServiceResult<ScopeDto>.Failure($"Scope '{request.Name}' 已存在");
+                return ServiceResult<ScopeDto>.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "ScopeAlreadyExists",
+                        Description = $"Scope '{request.Name}' 已存在"
+                    }
+                });
             }
 
             var descriptor = new OpenIddictScopeDescriptor
@@ -131,17 +138,24 @@ namespace OpenFindBearings.Identity.Services
                 Name = request.Name,
                 DisplayName = request.DisplayName ?? request.Name,
                 Description = request.Description,
-                Resources = request.Resources ?? new List<string>()
+                Resources = request.Resources ?? []
             });
         }
 
         /// <inheritdoc/>
-        public async Task<ServiceResult> UpdateAsync(string name, UpdateScopeRequest request, CancellationToken ct = default)
+        public async Task<ServiceResult> UpdateAsync(string name, UpdateScopeDto request, CancellationToken ct = default)
         {
             var scope = await _scopeManager.FindByNameAsync(name, ct);
             if (scope == null)
             {
-                return ServiceResult.Failure($"Scope '{name}' 不存在");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "ScopeNotFound",
+                        Description = $"Scope '{name}' 不存在"
+                    }
+                });
             }
 
             var descriptor = new OpenIddictScopeDescriptor
@@ -151,7 +165,6 @@ namespace OpenFindBearings.Identity.Services
                 Description = request.Description
             };
 
-            // 复制现有资源
             var existingResources = await _scopeManager.GetResourcesAsync(scope, ct);
             foreach (var resource in existingResources)
             {
@@ -167,16 +180,29 @@ namespace OpenFindBearings.Identity.Services
         /// <inheritdoc/>
         public async Task<ServiceResult> DeleteAsync(string name, CancellationToken ct = default)
         {
-            // 标准 Scope 不能删除
             if (_standardScopes.Contains(name))
             {
-                return ServiceResult.Failure($"标准 OIDC Scope '{name}' 不能删除");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "CannotDeleteStandardScope",
+                        Description = $"标准 OIDC Scope '{name}' 不能删除"
+                    }
+                });
             }
 
             var scope = await _scopeManager.FindByNameAsync(name, ct);
             if (scope == null)
             {
-                return ServiceResult.Failure($"Scope '{name}' 不存在");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "ScopeNotFound",
+                        Description = $"Scope '{name}' 不存在"
+                    }
+                });
             }
 
             await _scopeManager.DeleteAsync(scope, ct);

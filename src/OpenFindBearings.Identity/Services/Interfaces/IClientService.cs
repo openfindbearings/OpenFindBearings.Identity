@@ -1,5 +1,5 @@
 ﻿using OpenFindBearings.Identity.Models.DTOs;
-using OpenFindBearings.Identity.Models.DTOs.Requests;
+using OpenFindBearings.Identity.Models.DTOs.Client;
 
 namespace OpenFindBearings.Identity.Services.Interfaces
 {
@@ -21,12 +21,12 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 创建新客户端
         /// </summary>
-        Task<ServiceResult<ClientDto>> CreateAsync(CreateClientRequest request, CancellationToken ct = default);
+        Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 更新客户端
         /// </summary>
-        Task<ServiceResult> UpdateAsync(string clientId, UpdateClientRequest request, CancellationToken ct = default);
+        Task<ServiceResult> UpdateAsync(string clientId, UpdateClientDto request, CancellationToken ct = default);
 
         /// <summary>
         /// 删除客户端

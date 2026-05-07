@@ -4,6 +4,7 @@ using OpenFindBearings.Identity.Models.DTOs;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using OpenFindBearings.Identity.Models.DTOs.Role;
 
 namespace OpenFindBearings.Identity.Services
 {
@@ -52,7 +53,7 @@ namespace OpenFindBearings.Identity.Services
                     Id = role.Id,
                     Name = role.Name!,
                     UserCount = userCount.Count,
-                    CreatedAt = DateTimeOffset.UtcNow // Identity 表没有 CreatedAt，可以扩展
+                    CreatedAt = DateTimeOffset.UtcNow
                 });
             }
 
@@ -114,7 +115,14 @@ namespace OpenFindBearings.Identity.Services
         {
             if (await _roleManager.RoleExistsAsync(name))
             {
-                return ServiceResult<RoleDto>.Failure($"角色 '{name}' 已存在");
+                return ServiceResult<RoleDto>.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "RoleAlreadyExists",
+                        Description = $"角色 '{name}' 已存在"
+                    }
+                });
             }
 
             var role = new IdentityRole<Guid> { Name = name };
@@ -122,7 +130,11 @@ namespace OpenFindBearings.Identity.Services
 
             if (!result.Succeeded)
             {
-                return ServiceResult<RoleDto>.Failure(result.Errors.Select(e => e.Description).ToArray());
+                return ServiceResult<RoleDto>.Failure(result.Errors.Select(e => new ServiceError
+                {
+                    Code = e.Code,
+                    Description = e.Description
+                }).ToArray());
             }
 
             await _auditLogRepo.LogRoleActionAsync(null, "System", "CreateRole", role.Id.ToString(), null, true, ct);
@@ -141,20 +153,37 @@ namespace OpenFindBearings.Identity.Services
             var role = await _roleManager.FindByIdAsync(id.ToString());
             if (role == null)
             {
-                return ServiceResult.Failure("角色不存在");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "RoleNotFound",
+                        Description = "角色不存在"
+                    }
+                });
             }
 
-            // 检查是否有用户使用该角色
             var usersInRole = await _userManager.GetUsersInRoleAsync(role.Name!);
             if (usersInRole.Any())
             {
-                return ServiceResult.Failure($"角色 '{role.Name}' 仍有 {usersInRole.Count} 个用户在使用，无法删除");
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "RoleHasUsers",
+                        Description = $"角色 '{role.Name}' 仍有 {usersInRole.Count} 个用户在使用，无法删除"
+                    }
+                });
             }
 
             var result = await _roleManager.DeleteAsync(role);
             if (!result.Succeeded)
             {
-                return ServiceResult.Failure(result.Errors.Select(e => e.Description).ToArray());
+                return ServiceResult.Failure(result.Errors.Select(e => new ServiceError
+                {
+                    Code = e.Code,
+                    Description = e.Description
+                }).ToArray());
             }
 
             await _auditLogRepo.LogRoleActionAsync(null, "System", "DeleteRole", role.Id.ToString(), null, true, ct);

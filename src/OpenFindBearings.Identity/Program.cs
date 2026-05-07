@@ -65,7 +65,6 @@ app.MapStaticAssets();
 
 // 9. 端点映射
 app.MapControllers();
-app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
 app.MapDefaultControllerRoute().WithStaticAssets();
 
 // 10. 健康检查

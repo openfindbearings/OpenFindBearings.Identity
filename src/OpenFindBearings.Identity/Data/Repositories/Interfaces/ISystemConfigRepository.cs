@@ -13,5 +13,6 @@ namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
         Task UpdateAsync(SystemConfig config, CancellationToken ct = default);
         Task DeleteAsync(SystemConfig config, CancellationToken ct = default);
         Task<bool> ExistsAsync(string key, CancellationToken ct = default);
+        Task<int> SaveChangesAsync(CancellationToken ct = default);
     }
 }

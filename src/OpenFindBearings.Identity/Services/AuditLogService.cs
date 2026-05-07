@@ -1,5 +1,7 @@
 ﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
+using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Models.DTOs;
+using OpenFindBearings.Identity.Models.DTOs.AuditLog;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Services.Interfaces;
 
@@ -18,35 +20,47 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
-        public async Task<PaginatedResult<AuditLogDto>> GetPagedAsync(int page, int size, string? action = null, string? resourceType = null, DateTimeOffset? start = null, DateTimeOffset? end = null, CancellationToken ct = default)
+        public async Task<PaginatedResult<AuditLogDto>> GetPagedAsync(
+            int page, int size,
+            string? action = null,
+            string? resourceType = null,
+            DateTimeOffset? start = null,
+            DateTimeOffset? end = null,
+            CancellationToken ct = default)
         {
-            var query = await _auditLogRepo.GetAllAsync(0, int.MaxValue, ct);
-            var list = query.ToList();
+            if (page < 1) page = 1;
+            if (size < 1) size = 20;
+            if (size > 100) size = 100;
 
+            int skip = (page - 1) * size;
+            IReadOnlyList<AuditLog> logs;
+            int total;
+
+            // 根据不同的筛选条件调用 Repository 的对应方法
             if (!string.IsNullOrEmpty(action))
             {
-                list = list.Where(x => x.Action == action).ToList();
+                logs = await _auditLogRepo.GetByActionAsync(action, skip, size, ct);
+                total = logs.Count;
             }
-
-            if (!string.IsNullOrEmpty(resourceType))
+            else if (!string.IsNullOrEmpty(resourceType))
             {
-                list = list.Where(x => x.ResourceType == resourceType).ToList();
+                logs = await _auditLogRepo.GetByResourceTypeAsync(resourceType, skip, size, ct);
+                total = logs.Count;
             }
-
-            if (start.HasValue)
+            else if (start.HasValue || end.HasValue)
             {
-                list = list.Where(x => x.CreatedAt >= start.Value).ToList();
+                var startDate = start ?? DateTimeOffset.MinValue;
+                var endDate = end ?? DateTimeOffset.MaxValue;
+                logs = await _auditLogRepo.GetByDateRangeAsync(startDate, endDate, skip, size, ct);
+                total = logs.Count;
             }
-
-            if (end.HasValue)
+            else
             {
-                list = list.Where(x => x.CreatedAt <= end.Value).ToList();
+                logs = await _auditLogRepo.GetAllAsync(skip, size, ct);
+                total = await _auditLogRepo.GetCountAsync(ct);
             }
 
-            var total = list.Count;
-            var paged = list.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * size).Take(size).ToList();
-            var dtos = paged.Select(MapToDto).ToList();
-
+            var dtos = logs.Select(l => l.ToDto()).ToList();
             return new PaginatedResult<AuditLogDto>(dtos, total, page, size);
         }
 
@@ -54,14 +68,14 @@ namespace OpenFindBearings.Identity.Services
         public async Task<AuditLogDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
         {
             var log = await _auditLogRepo.GetByIdAsync(id, ct);
-            return log != null ? MapToDto(log) : null;
+            return log != null ? log.ToDto() : null;
         }
 
         /// <inheritdoc/>
         public async Task<IReadOnlyList<AuditLogDto>> GetByUserIdAsync(Guid userId, int take = 50, CancellationToken ct = default)
         {
             var logs = await _auditLogRepo.GetRecentByUserIdAsync(userId, take, ct);
-            return logs.Select(MapToDto).ToList();
+            return logs.Select(l => l.ToDto()).ToList();
         }
 
         /// <inheritdoc/>
@@ -74,30 +88,7 @@ namespace OpenFindBearings.Identity.Services
         public async Task<IReadOnlyList<AuditLogDto>> GetRecentAsync(int take = 20, CancellationToken ct = default)
         {
             var logs = await _auditLogRepo.GetAllAsync(0, take, ct);
-            return logs.Select(MapToDto).ToList();
-        }
-
-        /// <summary>
-        /// 实体转DTO
-        /// </summary>
-        private static AuditLogDto MapToDto(AuditLog log)
-        {
-            return new AuditLogDto
-            {
-                Id = log.Id,
-                UserId = log.UserId,
-                Username = log.Username,
-                Action = log.Action,
-                ResourceType = log.ResourceType,
-                ResourceId = log.ResourceId,
-                Details = log.Details,
-                Status = log.Status,
-                FailureReason = log.FailureReason,
-                ClientId = log.ClientId,
-                IpAddress = log.IpAddress,
-                UserAgent = log.UserAgent,
-                CreatedAt = log.CreatedAt
-            };
+            return logs.Select(l=>l.ToDto()).ToList();
         }
     }
 }
