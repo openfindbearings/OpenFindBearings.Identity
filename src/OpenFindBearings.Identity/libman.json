@@ -1,0 +1,18 @@
+{
+  "version": "3.0",
+  "defaultProvider": "jsdelivr",
+  "libraries": [
+    {
+      "library": "@coreui/coreui@5.6.1",
+      "destination": "wwwroot/lib/coreui/coreui/",
+      "files": [
+        "dist/css/coreui.min.css",
+        "dist/css/coreui.css",
+        "dist/js/coreui.bundle.js",
+        "dist/js/coreui.bundle.min.js",
+        "dist/js/coreui.js",
+        "dist/js/coreui.min.js"
+      ]
+    }
+  ]
+}

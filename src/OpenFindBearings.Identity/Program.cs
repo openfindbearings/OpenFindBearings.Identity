@@ -9,6 +9,9 @@ builder.Services.ConfigureForwardedHeaders(builder.Environment.IsDevelopment());
 // MVC
 builder.Services.AddControllersWithViews();
 
+// Identity
+builder.Services.AddIdentityService();
+
 // OpenIddict
 builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());
 
@@ -62,7 +65,6 @@ app.MapStaticAssets();
 
 // 9. 端点映射
 app.MapControllers();
-app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
 app.MapDefaultControllerRoute().WithStaticAssets();
 
 // 10. 健康检查

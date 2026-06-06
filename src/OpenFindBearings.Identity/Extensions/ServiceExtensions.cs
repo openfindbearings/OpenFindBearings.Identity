@@ -1,9 +1,13 @@
 ﻿using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
+using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Services;
+using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 using Quartz;
 using System.Net;
@@ -18,7 +22,29 @@ namespace OpenFindBearings.Identity.Extensions
     public static class ServiceExtensions
     {
         /// <summary>
-        /// 添加OpenIddict
+        /// 注册 Identity
+        /// </summary>
+        public static IServiceCollection AddIdentityService(this IServiceCollection services)
+        {
+            services.AddIdentity<OidcUser, IdentityRole<Guid>>(options =>
+            {
+                //options.Password.RequireDigit = true;
+                //options.Password.RequiredLength = 6;
+                //options.Password.RequireNonAlphanumeric = false;
+                //options.Password.RequireUppercase = true;
+                //options.Password.RequireLowercase = true;
+                //options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                //options.Lockout.MaxFailedAccessAttempts = 5;
+                //options.Lockout.AllowedForNewUsers = true;
+                //options.User.RequireUniqueEmail = true;
+            })
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
+
+            return services;
+        }
+        /// <summary>
+        /// 添加 OpenIddict
         /// </summary>
         public static IServiceCollection AddOpenIddictService(this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
         {
@@ -139,12 +165,19 @@ namespace OpenFindBearings.Identity.Extensions
         /// </summary>
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
-            services.AddScoped<IUserRepository, UserRepository>();
-            services.AddScoped<ISmsVerificationCodeRepository, SmsVerificationCodeRepository>();
-            services.AddScoped<IUserLoginBindingRepository, UserLoginBindingRepository>();
-            services.AddScoped<IUserLoginLogRepository, UserLoginLogRepository>();
-            services.AddScoped<IClientRepository, ClientRepository>();
-            services.AddScoped<IScopeRepository, ScopeRepository>();
+            // 注册 Services
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<IClientService, ClientService>();
+            services.AddScoped<IScopeService, ScopeService>();
+            services.AddScoped<IAuditLogService, AuditLogService>();
+            services.AddScoped<ISystemConfigService, SystemConfigService>();
+            services.AddScoped<ISmsCodeService, SmsCodeService>();
+
+            // 注册 Repositories
+            services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+            services.AddScoped<ISmsCodeRepository, SmsCodeRepository>();
+            services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
 
             return services;
         }

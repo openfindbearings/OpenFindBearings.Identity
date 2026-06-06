@@ -1,5 +1,6 @@
 ﻿namespace OpenFindBearings.Identity.Constants
 {
+    // SmsCode 实体中有 Type 字段，需要这些常量
     public static class SmsCodeTypeConstants
     {
         public const string Login = "login";
