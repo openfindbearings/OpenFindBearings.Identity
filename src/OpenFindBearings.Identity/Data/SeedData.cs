@@ -417,6 +417,38 @@ namespace OpenFindBearings.Identity.Data
                 });
                 logger.LogInformation("创建 Web 客户端成功");
             }
+
+            if (await appManager.FindByClientIdAsync("admin_client") == null)
+            {
+                await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+                {
+                    ClientId = "admin_client",
+                    ClientSecret = "admin-secret-key",
+                    ClientType = ClientTypes.Confidential,
+                    DisplayName = "Admin 后台管理",
+                    RedirectUris = { new Uri("https://localhost:5003/callback") },
+                    PostLogoutRedirectUris = { new Uri("https://localhost:5003/") },
+                    ConsentType = ConsentTypes.Explicit,
+                    Permissions =
+                    {
+                        Permissions.Endpoints.Authorization,
+                        Permissions.Endpoints.Token,
+                        Permissions.GrantTypes.AuthorizationCode,
+                        Permissions.GrantTypes.RefreshToken,
+                        Permissions.Prefixes.Scope + "openid",
+                        Permissions.Scopes.Profile,
+                        Permissions.Scopes.Email,
+                        Permissions.Scopes.Roles,
+                        Permissions.ResponseTypes.Code,
+                        Permissions.Prefixes.Scope + "api"
+                    },
+                    Requirements =
+                    {
+                        Requirements.Features.ProofKeyForCodeExchange
+                    }
+                });
+                logger.LogInformation("创建 Admin 客户端成功");
+            }
         }
 
         private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ILogger logger)

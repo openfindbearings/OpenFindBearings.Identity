@@ -498,6 +498,27 @@ namespace OpenFindBearings.Identity.Controllers
             return ApiResponseHelper.Success(this, result.Data!, "Password reset successfully");
         }
 
+        /// <summary>
+        /// 恢复已删除用户（管理员）
+        /// </summary>
+        [HttpPost("admin/users/{id}/restore")]
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        public async Task<ActionResult<ApiResponse<object>>> AdminRestoreUser(Guid id)
+        {
+            var result = await _userService.RestoreAsync(id);
+
+            if (!result.IsSuccess)
+            {
+                return ApiResponseHelper.BadRequest<object>(
+                    this,
+                    "Restore failed",
+                    result.GetErrorDictionary());
+            }
+
+            _logger.LogInformation("管理员恢复已删除用户: UserId={UserId}, Operator={Operator}", id, GetCurrentUserName());
+            return ApiResponseHelper.Success<object>(this, null!, "User restored successfully");
+        }
+
         #endregion
 
         #region ========== 辅助方法 ==========
