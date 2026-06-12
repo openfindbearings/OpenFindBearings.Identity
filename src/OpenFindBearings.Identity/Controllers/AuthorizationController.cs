@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
@@ -48,6 +49,7 @@ namespace OpenFindBearings.Identity.Controllers
 
             return request.GrantType switch
             {
+                GrantTypeConstants.AuthorizationCode => await HandleAuthorizationCodeAsync(request),
                 GrantTypeConstants.ClientCredentials => await HandleClientCredentialsAsync(request),
                 GrantTypeConstants.Password => await HandlePasswordAsync(request),
                 GrantTypeConstants.RefreshToken => await HandleRefreshTokenAsync(request),
@@ -59,7 +61,197 @@ namespace OpenFindBearings.Identity.Controllers
             };
         }
 
+        /// <summary>
+        /// 授权端点 - 处理授权码请求（Admin 登录用）
+        /// </summary>
+        [HttpGet("~/connect/authorize")]
+        public async Task<IActionResult> Authorize()
+        {
+            var request = HttpContext.GetOpenIddictServerRequest()
+                ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
+
+            _logger.LogInformation("收到授权请求: ClientId={ClientId}, RedirectUri={RedirectUri}",
+                request.ClientId, request.RedirectUri);
+
+            // 验证客户端是否存在
+            var client = await _clientService.GetByClientIdAsync(request.ClientId!);
+            if (client == null)
+            {
+                _logger.LogWarning("授权请求: 客户端不存在 {ClientId}", request.ClientId);
+                return BadRequest("Invalid client_id");
+            }
+
+            // 检查用户是否已登录
+            if (!User.Identity?.IsAuthenticated ?? true)
+            {
+                // 未登录，跳转到登录页，保留完整原始请求 URL（含所有 query 参数）
+                var returnUrl = $"{Request.Path}{Request.QueryString}";
+                return Redirect($"/connect/authorize/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+            }
+
+            // Implicit 模式：自动授予授权码
+            return await IssueAuthorizationCodeAsync(request);
+        }
+
+        /// <summary>
+        /// 授予授权码（自动同意）
+        /// </summary>
+        private async Task<IActionResult> IssueAuthorizationCodeAsync(OpenIddictRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Forbid("Authentication cookie is invalid.");
+            }
+
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null)
+            {
+                return Forbid("Authentication cookie is invalid.");
+            }
+
+            // 获取用户角色和声明
+            var roles = await _userService.GetRolesAsync(user.Id);
+            var claims = await _userService.GetClaimsAsync(user.Id);
+
+            // 创建身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 添加用户声明
+            identity.SetClaim(Claims.Subject, user.Sub);
+            identity.SetClaim(Claims.Email, user.Email);
+            identity.SetClaim(Claims.Name, user.Name ?? user.UserName);
+            identity.SetClaim(Claims.PreferredUsername, user.UserName);
+
+            // 添加租户声明
+            identity.SetClaim("tenant_id", user.TenantId.ToString());
+
+            // 添加角色声明
+            foreach (var role in roles)
+            {
+                identity.SetClaim(Claims.Role, role);
+            }
+
+            // 添加自定义声明
+            foreach (var claim in claims)
+            {
+                identity.SetClaim(claim.Type, claim.Value);
+            }
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
+            identity.SetScopes(allowedScopes);
+            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("授权码: 用户 {Username} 授权成功, ClientId={ClientId}",
+                user.UserName, request.ClientId);
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
         #region 授权类型处理
+
+        /// <summary>
+        /// 处理授权码授权 (authorization_code)
+        /// 授权码已在 /connect/authorize 端点签发，此处从已存储的授权中恢复用户身份并签发 token
+        /// </summary>
+        private async Task<IActionResult> HandleAuthorizationCodeAsync(OpenIddictRequest request)
+        {
+            // 从 OpenIddict 中间件获取授权码关联的用户身份
+            var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            if (result?.Principal == null)
+            {
+                _logger.LogWarning("授权码模式: 无法从授权码中恢复用户身份");
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The authorization code is no longer valid."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 从 Subject 获取用户 ID，加载完整用户信息
+            var subject = result.Principal.FindFirst(Claims.Subject)?.Value;
+            if (string.IsNullOrEmpty(subject))
+            {
+                _logger.LogWarning("授权码模式: 授权码中缺少 Subject 声明");
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The authorization code is invalid."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            var user = await _userService.GetByIdAsync(Guid.Parse(subject));
+            if (user == null)
+            {
+                _logger.LogWarning("授权码模式: 用户不存在 Subject={Subject}", subject);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user account is no longer available."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 检查用户是否可以登录
+            var canLogin = await _userService.CheckCanLoginAsync(user.Id);
+            if (!canLogin)
+            {
+                _logger.LogWarning("授权码模式: 用户无法登录 UserId={UserId}", user.Id);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user account is no longer available."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 获取用户角色和声明
+            var roles = await _userService.GetRolesAsync(user.Id);
+            var claims = await _userService.GetClaimsAsync(user.Id);
+
+            // 创建新的身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 添加用户声明
+            identity.SetClaim(Claims.Subject, user.Sub);
+            identity.SetClaim(Claims.Email, user.Email);
+            identity.SetClaim(Claims.Name, user.Name ?? user.UserName);
+            identity.SetClaim(Claims.PreferredUsername, user.UserName);
+
+            // 添加租户声明
+            identity.SetClaim("tenant_id", user.TenantId.ToString());
+
+            // 添加角色声明
+            foreach (var role in roles)
+            {
+                identity.SetClaim(Claims.Role, role);
+            }
+
+            // 添加自定义声明
+            foreach (var claim in claims)
+            {
+                identity.SetClaim(claim.Type, claim.Value);
+            }
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
+            identity.SetScopes(allowedScopes);
+            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("授权码模式: 用户 {Username} Token 交换成功, Scopes={Scopes}",
+                user.UserName, string.Join(",", allowedScopes));
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
 
         /// <summary>
         /// 处理客户端凭证授权 (client_credentials)
@@ -174,6 +366,9 @@ namespace OpenFindBearings.Identity.Controllers
             identity.SetClaim(Claims.Name, user.Name ?? user.UserName);
             identity.SetClaim(Claims.PreferredUsername, user.UserName);
 
+            // 添加租户声明
+            identity.SetClaim("tenant_id", user.TenantId.ToString());
+
             // 添加角色声明
             foreach (var role in roles)
             {
@@ -212,6 +407,10 @@ namespace OpenFindBearings.Identity.Controllers
                 throw new NotImplementedException("The specified grant type is not implemented.");
             }
 
+            // 从 OpenIddict 中间件获取原始授权的用户身份
+            var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            var originalClaims = result?.Principal?.Claims ?? Enumerable.Empty<Claim>();
+
             // 创建身份标识
             var identity = new ClaimsIdentity(
                 authenticationType: TokenValidationParameters.DefaultAuthenticationType,
@@ -221,6 +420,13 @@ namespace OpenFindBearings.Identity.Controllers
             // 使用 client_id 作为 subject
             identity.SetClaim(Claims.Subject, request.ClientId);
             identity.SetClaim(Claims.Name, request.ClientId);
+
+            // 从原始授权中恢复 tenant_id（如果有）
+            var tenantId = originalClaims.FirstOrDefault(c => c.Type == "tenant_id")?.Value;
+            if (!string.IsNullOrEmpty(tenantId))
+            {
+                identity.SetClaim("tenant_id", tenantId);
+            }
 
             // 设置作用域
             var scopes = request.GetScopes().ToList();
@@ -265,6 +471,68 @@ namespace OpenFindBearings.Identity.Controllers
         #endregion
 
         #region 辅助方法
+
+        /// <summary>
+        /// 登录页面（Admin OAuth 流程）
+        /// </summary>
+        [HttpGet("~/connect/authorize/login")]
+        public IActionResult Login(string returnUrl = "/")
+        {
+            ViewBag.ReturnUrl = returnUrl;
+            return View();
+        }
+
+        /// <summary>
+        /// 处理登录提交
+        /// </summary>
+        [HttpPost("~/connect/authorize/login")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LoginSubmit(string username, string password, string returnUrl = "/")
+        {
+            // 验证用户名和密码
+            var user = await _userService.GetByUsernameAsync(username);
+            if (user == null)
+            {
+                ViewBag.Error = "用户名或密码错误";
+                ViewBag.ReturnUrl = returnUrl;
+                return View("Login");
+            }
+
+            // 检查用户是否可以登录
+            var canLogin = await _userService.CheckCanLoginAsync(user.Id);
+            if (!canLogin)
+            {
+                ViewBag.Error = "账户不可用";
+                ViewBag.ReturnUrl = returnUrl;
+                return View("Login");
+            }
+
+            // 验证密码
+            var isValidPassword = await _userService.CheckPasswordAsync(user.Id, password);
+            if (!isValidPassword)
+            {
+                await _userService.RecordLoginFailureAsync(user.Id);
+                ViewBag.Error = "用户名或密码错误";
+                ViewBag.ReturnUrl = returnUrl;
+                return View("Login");
+            }
+
+            // 记录登录成功
+            await _userService.RecordLoginSuccessAsync(user.Id, HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            // 创建 Cookie 登录（为后续授权端点使用）
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.UserName ?? "")
+            };
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+            return Redirect(returnUrl);
+        }
 
         /// <summary>
         /// 获取作用域关联的资源列表

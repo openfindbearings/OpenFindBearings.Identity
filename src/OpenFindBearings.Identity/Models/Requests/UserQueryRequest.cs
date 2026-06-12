@@ -33,6 +33,11 @@ namespace OpenFindBearings.Identity.Models.Requests
         public string? Role { get; set; }
 
         /// <summary>
+        /// 租户筛选
+        /// </summary>
+        public Guid? TenantId { get; set; }
+
+        /// <summary>
         /// 注册开始时间
         /// </summary>
         public DateTimeOffset? DateFrom { get; set; }

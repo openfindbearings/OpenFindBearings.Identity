@@ -257,6 +257,7 @@ namespace OpenFindBearings.Identity.Controllers
                 request.Search,
                 request.Status,
                 request.Role,
+                request.TenantId,
                 request.DateFrom,
                 request.DateTo,
                 request.LastLoginFrom,

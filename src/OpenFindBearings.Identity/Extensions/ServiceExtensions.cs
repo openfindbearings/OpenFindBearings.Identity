@@ -94,6 +94,7 @@ namespace OpenFindBearings.Identity.Extensions
                            .SetUserInfoEndpointUris("connect/userinfo")
                            .SetEndSessionEndpointUris("connect/logout")
                            .SetRevocationEndpointUris("/connect/revocation")
+                           .SetAuthorizationEndpointUris("/connect/authorize")
                            ;
 
                     options.AllowClientCredentialsFlow() // Enable the client credentials flow.
@@ -101,6 +102,7 @@ namespace OpenFindBearings.Identity.Extensions
                            //.AllowCustomFlow("sms")
                            //.AllowCustomFlow("wechat")
                            //.AllowCustomFlow("alipay")
+                           .AllowAuthorizationCodeFlow()  // 授权码流程（Admin 登录用）
                            .AllowRefreshTokenFlow();
 
                     // Register the signing and encryption credentials.
@@ -109,6 +111,8 @@ namespace OpenFindBearings.Identity.Extensions
                     {
                         options.AddDevelopmentEncryptionCertificate()
                                .AddDevelopmentSigningCertificate();
+                        options.UseAspNetCore()
+                               .DisableTransportSecurityRequirement();
                     }
                     else
                     {
@@ -144,7 +148,8 @@ namespace OpenFindBearings.Identity.Extensions
 
                     // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
                     options.UseAspNetCore()
-                           .EnableTokenEndpointPassthrough();
+                           .EnableTokenEndpointPassthrough()
+                           .EnableAuthorizationEndpointPassthrough();  // 授权端点透传
                 })
 
                 // Register the OpenIddict validation components.

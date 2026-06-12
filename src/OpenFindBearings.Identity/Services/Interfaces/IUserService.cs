@@ -14,7 +14,7 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 分页获取用户列表
         /// </summary>
-        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
+        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, Guid? tenantId = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
 
         /// <summary>
         /// 根据 ID 获取用户

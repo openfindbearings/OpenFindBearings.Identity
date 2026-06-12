@@ -1,4 +1,5 @@
-﻿using OpenFindBearings.Identity.Data;
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +12,15 @@ builder.Services.AddControllersWithViews();
 
 // Identity
 builder.Services.AddIdentityService();
+
+// Cookie 认证（管理后台登录 + OAuth 登录流程共用）
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/connect/authorize/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+    });
 
 // OpenIddict
 builder.Services.AddOpenIddictService(builder.Configuration, builder.Environment.IsDevelopment());

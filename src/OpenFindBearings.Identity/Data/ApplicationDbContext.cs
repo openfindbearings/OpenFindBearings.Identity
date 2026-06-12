@@ -11,6 +11,7 @@ namespace OpenFindBearings.Identity.Data
         public DbSet<AuditLog> AuditLogs { get; set; } = default!;
         public DbSet<SmsCode> SmsCodes { get; set; } = default!;
         public DbSet<SystemConfig> SystemConfigs { get; set; } = default!;
+        public DbSet<Tenant> Tenants { get; set; } = default!;
 
         //// OpenIddict 表
         //public DbSet<OpenIddictEntityFrameworkCoreApplication> Applications { get; set; } = default!;
@@ -91,6 +92,22 @@ namespace OpenFindBearings.Identity.Data
                 e.Property(x => x.Key).IsRequired().HasMaxLength(200);
                 e.Property(x => x.Value).HasColumnType("text");
                 e.Property(x => x.Description).HasMaxLength(500);
+            });
+
+            // 租户表
+            builder.Entity<Tenant>(e =>
+            {
+                e.ToTable("Tenants");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+                e.Property(x => x.Description).HasMaxLength(500);
+            });
+
+            // 用户表 - 租户关联
+            builder.Entity<OidcUser>(e =>
+            {
+                e.HasIndex(x => x.TenantId);
+                e.Property(x => x.TenantId).IsRequired();
             });
         }
     }

@@ -86,6 +86,7 @@ namespace OpenFindBearings.Identity.Extensions
                 CreatedAt = dto.CreatedAt,
                 UpdatedAt = dto.UpdatedAt,
                 LastLoginAt = dto.LastLoginAt,
+                TenantId = dto.TenantId,
                 Roles = dto.Roles
             };
         }

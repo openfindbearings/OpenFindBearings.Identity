@@ -37,6 +37,7 @@ namespace OpenFindBearings.Identity.Data
 
                 await context.Database.MigrateAsync();
 
+                await SeedTenantsAsync(context, logger);
                 await SeedRolesAsync(roleManager, logger);
                 await SeedUsersAsync(userManager, logger);
                 await SeedUserRolesAsync(userManager, roleManager, logger);
@@ -50,6 +51,37 @@ namespace OpenFindBearings.Identity.Data
                 logger.LogError(ex, "数据库初始化失败");
             }
         }
+
+        #region 租户初始化
+
+        private static async Task SeedTenantsAsync(ApplicationDbContext context, ILogger logger)
+        {
+            if (await context.Tenants.AnyAsync())
+            {
+                logger.LogInformation("租户数据已存在，跳过初始化");
+                return;
+            }
+
+            logger.LogInformation("开始初始化租户数据...");
+
+            var openFindBearingsId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+            var tenant = new Tenant
+            {
+                Id = openFindBearingsId,
+                Name = "OpenFindBearings",
+                Description = "OpenFindBearings 轴承信息管理系统",
+                IsEnabled = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.Tenants.Add(tenant);
+            await context.SaveChangesAsync();
+
+            logger.LogInformation("租户数据初始化完成，添加租户: {TenantName}", tenant.Name);
+        }
+
+        #endregion
 
         #region 角色初始化
 
@@ -144,6 +176,7 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: "admin",
                 email: "admin@example.com",
+                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 phoneNumber: "+8613800000001",
                 name: "系统管理员",
                 givenName: "管理",
@@ -195,6 +228,7 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: username,
                 email: email,
+                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 phoneNumber: phoneNumber,
                 name: name,
                 givenName: givenName,
@@ -245,6 +279,7 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: "lockeduser",
                 email: "locked@example.com",
+                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 phoneNumber: "+8613800000004",
                 name: "锁定用户",
                 givenName: "锁定",
@@ -426,9 +461,9 @@ namespace OpenFindBearings.Identity.Data
                     ClientSecret = "admin-secret-key",
                     ClientType = ClientTypes.Confidential,
                     DisplayName = "Admin 后台管理",
-                    RedirectUris = { new Uri("https://localhost:5003/callback") },
-                    PostLogoutRedirectUris = { new Uri("https://localhost:5003/") },
-                    ConsentType = ConsentTypes.Explicit,
+                    RedirectUris = { new Uri("https://localhost:7167/callback") },
+                    PostLogoutRedirectUris = { new Uri("https://localhost:7167/") },
+                    ConsentType = ConsentTypes.Implicit,  // 开发环境跳过同意页
                     Permissions =
                     {
                         Permissions.Endpoints.Authorization,
@@ -440,11 +475,7 @@ namespace OpenFindBearings.Identity.Data
                         Permissions.Scopes.Email,
                         Permissions.Scopes.Roles,
                         Permissions.ResponseTypes.Code,
-                        Permissions.Prefixes.Scope + "api"
-                    },
-                    Requirements =
-                    {
-                        Requirements.Features.ProofKeyForCodeExchange
+                        Permissions.Prefixes.Scope + "api:admin"
                     }
                 });
                 logger.LogInformation("创建 Admin 客户端成功");
@@ -467,6 +498,23 @@ namespace OpenFindBearings.Identity.Data
                 catch (Exception ex)
                 {
                     logger.LogError($"创建 Scope [api:sync] 失败：{ex.Message}");
+                }
+            }
+
+            if (await scopeManager.FindByNameAsync("api:admin") is null)
+            {
+                try
+                {
+                    await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+                    {
+                        Name = "api:admin",
+                        Resources = { ApiResourceConstants.BaseApi }
+                    });
+                    logger.LogInformation("创建 Scope [api:admin] 成功");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"创建 Scope [api:admin] 失败：{ex.Message}");
                 }
             }
         }

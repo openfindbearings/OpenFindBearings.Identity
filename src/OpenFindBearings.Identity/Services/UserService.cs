@@ -41,6 +41,7 @@ namespace OpenFindBearings.Identity.Services
      string? search = null,
      UserStatusFilter? status = null,
      string? role = null,
+     Guid? tenantId = null,
      DateTimeOffset? dateFrom = null,
      DateTimeOffset? dateTo = null,
      DateTimeOffset? lastLoginFrom = null,
@@ -48,6 +49,12 @@ namespace OpenFindBearings.Identity.Services
      CancellationToken ct = default)
         {
             var query = _userManager.Users.Where(u => u.IsActive);
+
+            // 租户过滤
+            if (tenantId.HasValue)
+            {
+                query = query.Where(u => u.TenantId == tenantId.Value);
+            }
 
             // 搜索过滤（用户名/邮箱/姓名/手机号）
             if (!string.IsNullOrEmpty(search))
@@ -171,6 +178,7 @@ namespace OpenFindBearings.Identity.Services
             var user = OidcUser.Create(
                 userName: request.UserName,
                 email: request.Email,
+                tenantId: request.TenantId ?? Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 phoneNumber: request.PhoneNumber,
                 name: request.Name,
                 givenName: request.GivenName,
