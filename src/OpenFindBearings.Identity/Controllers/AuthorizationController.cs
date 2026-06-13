@@ -1,9 +1,10 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
+using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -20,17 +21,20 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly IUserService _userService;
         private readonly IClientService _clientService;
         private readonly IScopeService _scopeService;
+        private readonly UserManager<OidcUser> _userManager;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
             IUserService userService,
             IClientService clientService,
             IScopeService scopeService,
+            UserManager<OidcUser> userManager,
             ILogger<AuthorizationController> logger)
         {
             _userService = userService;
             _clientService = clientService;
             _scopeService = scopeService;
+            _userManager = userManager;
             _logger = logger;
         }
 
@@ -82,6 +86,10 @@ namespace OpenFindBearings.Identity.Controllers
             }
 
             // 检查用户是否已登录
+            _logger.LogWarning("Authorize: IsAuthenticated={IsAuthenticated}, IdentityType={IdentityType}, Cookies={CookieKeys}",
+                User.Identity?.IsAuthenticated,
+                User.Identity?.AuthenticationType,
+                string.Join(",", HttpContext.Request.Cookies.Keys));
             if (!User.Identity?.IsAuthenticated ?? true)
             {
                 // 未登录，跳转到登录页，保留完整原始请求 URL（含所有 query 参数）
@@ -141,11 +149,10 @@ namespace OpenFindBearings.Identity.Controllers
                 identity.SetClaim(claim.Type, claim.Value);
             }
 
-            // 设置作用域
+            // 设置作用域（scopes 由 OpenIddict 前置校验过滤，handler 内无需再过滤）
             var scopes = request.GetScopes().ToList();
-            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
-            identity.SetScopes(allowedScopes);
-            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetScopes(scopes);
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
             identity.SetDestinations(GetDestinations);
 
             _logger.LogInformation("授权码: 用户 {Username} 授权成功, ClientId={ClientId}",
@@ -240,15 +247,14 @@ namespace OpenFindBearings.Identity.Controllers
                 identity.SetClaim(claim.Type, claim.Value);
             }
 
-            // 设置作用域
+            // 设置作用域（scopes 由 OpenIddict 前置校验过滤，handler 内无需再过滤）
             var scopes = request.GetScopes().ToList();
-            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
-            identity.SetScopes(allowedScopes);
-            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetScopes(scopes);
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
             identity.SetDestinations(GetDestinations);
 
             _logger.LogInformation("授权码模式: 用户 {Username} Token 交换成功, Scopes={Scopes}",
-                user.UserName, string.Join(",", allowedScopes));
+                user.UserName, string.Join(",", scopes));
 
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
@@ -381,17 +387,16 @@ namespace OpenFindBearings.Identity.Controllers
                 identity.SetClaim(claim.Type, claim.Value);
             }
 
-            // 设置作用域
+            // 设置作用域（scopes 由 OpenIddict 前置校验过滤，handler 内无需再过滤）
             var scopes = request.GetScopes().ToList();
-            var allowedScopes = new[] { Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles }.Intersect(scopes);
-            identity.SetScopes(allowedScopes);
+            identity.SetScopes(scopes);
 
             // 设置资源
-            identity.SetResources(await GetScopeResourcesAsync(allowedScopes));
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
             identity.SetDestinations(GetDestinations);
 
             _logger.LogInformation("密码模式: 用户 {Username} 登录成功, Scopes={Scopes}",
-                request.Username, string.Join(",", allowedScopes));
+                request.Username, string.Join(",", scopes));
 
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
@@ -490,7 +495,7 @@ namespace OpenFindBearings.Identity.Controllers
         public async Task<IActionResult> LoginSubmit(string username, string password, string returnUrl = "/")
         {
             // 验证用户名和密码
-            var user = await _userService.GetByUsernameAsync(username);
+            var user = await _userManager.FindByNameAsync(username);
             if (user == null)
             {
                 ViewBag.Error = "用户名或密码错误";
@@ -499,8 +504,7 @@ namespace OpenFindBearings.Identity.Controllers
             }
 
             // 检查用户是否可以登录
-            var canLogin = await _userService.CheckCanLoginAsync(user.Id);
-            if (!canLogin)
+            if (!user.IsActive)
             {
                 ViewBag.Error = "账户不可用";
                 ViewBag.ReturnUrl = returnUrl;
@@ -508,30 +512,57 @@ namespace OpenFindBearings.Identity.Controllers
             }
 
             // 验证密码
-            var isValidPassword = await _userService.CheckPasswordAsync(user.Id, password);
+            var isValidPassword = await _userManager.CheckPasswordAsync(user, password);
             if (!isValidPassword)
             {
-                await _userService.RecordLoginFailureAsync(user.Id);
+                user.RecordFailedLogin();
+                await _userManager.UpdateAsync(user);
                 ViewBag.Error = "用户名或密码错误";
                 ViewBag.ReturnUrl = returnUrl;
                 return View("Login");
             }
 
             // 记录登录成功
-            await _userService.RecordLoginSuccessAsync(user.Id, HttpContext.Connection.RemoteIpAddress?.ToString());
+            user.RecordSuccessfulLogin(HttpContext.Connection.RemoteIpAddress?.ToString());
+            await _userManager.UpdateAsync(user);
 
-            // 创建 Cookie 登录（为后续授权端点使用）
+            // 使用 Identity.Application 方案创建 Cookie（对应 UseAuthentication 的默认方案）
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName ?? "")
             };
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var identity = new ClaimsIdentity(claims, IdentityConstants.ApplicationScheme);
             var principal = new ClaimsPrincipal(identity);
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+            await HttpContext.SignInAsync(IdentityConstants.ApplicationScheme, principal, new AuthenticationProperties
+            {
+                IsPersistent = true,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+            });
+
+            _logger.LogWarning("LoginSubmit: 登录成功, UserId={UserId}, Username={Username}",
+                user.Id, user.UserName);
 
             return Redirect(returnUrl);
+        }
+
+        /// <summary>
+        /// OIDC 结束会话端点（RP-Initiated Logout）
+        /// </summary>
+        [HttpGet("~/connect/endsession")]
+        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null)
+        {
+            // 清除 Identity 的认证 Cookie
+            await HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
+
+            // 跳转到客户端的登出后回调地址
+            if (!string.IsNullOrEmpty(post_logout_redirect_uri))
+            {
+                return Redirect(post_logout_redirect_uri);
+            }
+
+            return Redirect("/");
         }
 
         /// <summary>

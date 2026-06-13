@@ -470,11 +470,11 @@ namespace OpenFindBearings.Identity.Data
                         Permissions.Endpoints.Token,
                         Permissions.GrantTypes.AuthorizationCode,
                         Permissions.GrantTypes.RefreshToken,
-                        Permissions.Prefixes.Scope + "openid",
+                        Permissions.ResponseTypes.Code,
                         Permissions.Scopes.Profile,
                         Permissions.Scopes.Email,
                         Permissions.Scopes.Roles,
-                        Permissions.ResponseTypes.Code,
+                        Permissions.Prefixes.Scope + "openid",
                         Permissions.Prefixes.Scope + "api:admin"
                     }
                 });

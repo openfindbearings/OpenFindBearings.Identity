@@ -140,7 +140,7 @@ namespace OpenFindBearings.Identity.Extensions
                     options.SetIssuer(configuration["OpenIddict:Issuer"] ?? "https://localhost:7201");
 
                     // supported scopes.
-                    options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.Phone, Scopes.Address);
+                    options.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.Phone, Scopes.Address);
 
                     // 配置令牌的有效期
                     options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10))        // A. 访问令牌有效期
