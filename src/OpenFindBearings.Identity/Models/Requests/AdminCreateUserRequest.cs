@@ -18,6 +18,9 @@ namespace OpenFindBearings.Identity.Models.Requests
         [MinLength(6, ErrorMessage = "密码长度至少6位")]
         public string Password { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "请选择租户")]
+        public Guid TenantId { get; set; }
+
         public string? PhoneNumber { get; set; }
         public string? Name { get; set; }
         public string? GivenName { get; set; }

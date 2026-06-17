@@ -26,13 +26,16 @@ namespace OpenFindBearings.Identity.Extensions
         /// </summary>
         public static IServiceCollection AddIdentityService(this IServiceCollection services)
         {
+            // 在 AddIdentity 前注册租户感知验证器，防止默认 UserValidator 全局用户名唯一校验
+            services.AddScoped<IUserValidator<OidcUser>, TenantAwareUserValidator>();
+
             services.AddIdentity<OidcUser, IdentityRole<Guid>>(options =>
             {
-                //options.Password.RequireDigit = true;
-                //options.Password.RequiredLength = 6;
-                //options.Password.RequireNonAlphanumeric = false;
-                //options.Password.RequireUppercase = true;
-                //options.Password.RequireLowercase = true;
+                options.Password.RequireDigit = false;
+                options.Password.RequiredLength = 6;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireLowercase = false;
                 //options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 //options.Lockout.MaxFailedAccessAttempts = 5;
                 //options.Lockout.AllowedForNewUsers = true;
@@ -57,7 +60,6 @@ namespace OpenFindBearings.Identity.Extensions
                     b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
 
                 // Register the entity sets needed by OpenIddict.
-                // Note: use the generic overload if you need to replace the default OpenIddict entities.
                 options.UseOpenIddict();
             });
 
@@ -78,9 +80,9 @@ namespace OpenFindBearings.Identity.Extensions
                 .AddCore(options =>
                 {
                     // Configure OpenIddict to use the Entity Framework Core stores and models.
-                    // Note: call ReplaceDefaultEntities() to replace the default OpenIddict entities.
                     options.UseEntityFrameworkCore()
-                           .UseDbContext<ApplicationDbContext>();
+                           .UseDbContext<ApplicationDbContext>()
+                           .ReplaceDefaultEntities<Guid>();
 
                     // Enable Quartz.NET integration.
                     options.UseQuartz();
@@ -148,8 +150,10 @@ namespace OpenFindBearings.Identity.Extensions
 
                     // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
                     options.UseAspNetCore()
-                           .EnableTokenEndpointPassthrough()
-                           .EnableAuthorizationEndpointPassthrough();  // 授权端点透传
+                            .EnableAuthorizationEndpointPassthrough()
+                            .EnableTokenEndpointPassthrough()
+                            .EnableEndSessionEndpointPassthrough()
+                            .EnableStatusCodePagesIntegration();
                 })
 
                 // Register the OpenIddict validation components.
@@ -170,6 +174,9 @@ namespace OpenFindBearings.Identity.Extensions
         /// </summary>
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+            services.AddScoped<ITenantResolver, TenantResolver>();
+
             // 注册 Services
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IRoleService, RoleService>();
@@ -178,6 +185,7 @@ namespace OpenFindBearings.Identity.Extensions
             services.AddScoped<IAuditLogService, AuditLogService>();
             services.AddScoped<ISystemConfigService, SystemConfigService>();
             services.AddScoped<ISmsCodeService, SmsCodeService>();
+            services.AddScoped<ITenantService, TenantService>();
 
             // 注册 Repositories
             services.AddScoped<IAuditLogRepository, AuditLogRepository>();

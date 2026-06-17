@@ -1,5 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using OpenFindBearings.Identity.Constants;
+using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Models.DTOs;
@@ -7,6 +10,7 @@ using OpenFindBearings.Identity.Models.DTOs.User;
 using OpenFindBearings.Identity.Models.Requests;
 using OpenFindBearings.Identity.Models.Responses;
 using OpenFindBearings.Identity.Services.Interfaces;
+using OpenIddict.Validation.AspNetCore;
 using System.Security.Claims;
 
 namespace OpenFindBearings.Identity.Controllers
@@ -16,16 +20,20 @@ namespace OpenFindBearings.Identity.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
     public class AccountController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ApplicationDbContext _context;
         private readonly ILogger<AccountController> _logger;
 
         public AccountController(
             IUserService userService,
+            ApplicationDbContext context,
             ILogger<AccountController> logger)
         {
             _userService = userService;
+            _context = context;
             _logger = logger;
         }
 
@@ -54,26 +62,41 @@ namespace OpenFindBearings.Identity.Controllers
                 return ApiResponseHelper.BadRequest<UserResponse>(this, "You must agree to the terms");
             }
 
+            // 解析 realm 为租户 ID
+            Guid? tenantId = null;
+            if (!string.IsNullOrEmpty(request.Realm))
+            {
+                var tenant = await _context.Tenants.AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Name == request.Realm);
+                if (tenant != null) tenantId = tenant.Id;
+            }
+
+            if (tenantId == null)
+            {
+                return ApiResponseHelper.BadRequest<UserResponse>(this, "Invalid realm");
+            }
+
             var dto = new CreateUserDto
             {
                 Password = request.Password,
-                UserName = request.Account
+                UserName = request.Account,
+                TenantId = tenantId
             };
 
             UserDto? user;
             if (PhoneNumberHelper.IsValid(dto.UserName))
             {
                 dto.PhoneNumber = dto.UserName;
-                user = await _userService.GetByPhoneNumberAsync(dto.UserName);
+                user = await _userService.GetByPhoneNumberAsync(dto.UserName, tenantId.Value);
             }
             else if (EmailHelper.IsValid(dto.UserName))
             {
                 dto.Email = dto.UserName;
-                user = await _userService.GetByEmailAsync(dto.UserName);
+                user = await _userService.GetByEmailAsync(dto.UserName, tenantId.Value);
             }
             else
             {
-                user = await _userService.GetByUsernameAsync(dto.UserName);
+                user = await _userService.GetByUsernameAsync(dto.UserName, tenantId.Value);
             }
 
             if (user != null)
@@ -120,7 +143,6 @@ namespace OpenFindBearings.Identity.Controllers
         /// 获取当前用户信息（自身）
         /// </summary>
         [HttpGet("me")]
-        [Authorize]
         public async Task<ActionResult<ApiResponse<UserResponse>>> GetMyProfile()
         {
             var userId = GetCurrentUserId();
@@ -143,7 +165,6 @@ namespace OpenFindBearings.Identity.Controllers
         /// 更新当前用户资料
         /// </summary>
         [HttpPut("me/profile")]
-        [Authorize]
         public async Task<ActionResult<ApiResponse<object>>> UpdateMyProfile([FromBody] UpdateProfileRequest request)
         {
             var userId = GetCurrentUserId();
@@ -173,7 +194,6 @@ namespace OpenFindBearings.Identity.Controllers
         /// 修改当前用户密码
         /// </summary>
         [HttpPost("me/change-password")]
-        [Authorize]
         public async Task<ActionResult<ApiResponse<object>>> ChangeMyPassword([FromBody] ChangePasswordRequest request)
         {
             if (!ModelState.IsValid)
@@ -211,7 +231,6 @@ namespace OpenFindBearings.Identity.Controllers
         /// 删除当前用户账户（软删除）
         /// </summary>
         [HttpDelete("me/account")]
-        [Authorize]
         public async Task<ActionResult<ApiResponse<object>>> DeleteMyAccount()
         {
             var userId = GetCurrentUserId();
@@ -251,13 +270,22 @@ namespace OpenFindBearings.Identity.Controllers
             if (request.PageSize < 1) request.PageSize = 20;
             if (request.PageSize > 100) request.PageSize = 100;
 
+            // 未传 tenantId 时使用当前管理员 JWT 中的 tenant_id claim
+            var effectiveTenantId = request.TenantId;
+            if (!effectiveTenantId.HasValue)
+            {
+                var tidClaim = User.FindFirst("tenant_id")?.Value;
+                if (!string.IsNullOrEmpty(tidClaim) && Guid.TryParse(tidClaim, out var tid))
+                    effectiveTenantId = tid;
+            }
+
             var result = await _userService.GetPagedAsync(
                 request.Page,
                 request.PageSize,
                 request.Search,
                 request.Status,
                 request.Role,
-                request.TenantId,
+                effectiveTenantId,
                 request.DateFrom,
                 request.DateTo,
                 request.LastLoginFrom,
@@ -279,7 +307,7 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<UserResponse>>> AdminGetUserById(Guid id)
         {
-            var user = await _userService.GetByIdAsync(id);
+            var user = await GetTenantUserAsync(id);
 
             if (user == null)
             {
@@ -302,6 +330,11 @@ namespace OpenFindBearings.Identity.Controllers
                 return ApiResponseHelper.BadRequest<UserResponse>(this, "Invalid request data");
             }
 
+            var adminTenantIdClaim = User.FindFirst("tenant_id")?.Value;
+            Guid? adminTenantId = null;
+            if (!string.IsNullOrEmpty(adminTenantIdClaim) && Guid.TryParse(adminTenantIdClaim, out var atid))
+                adminTenantId = atid;
+
             var dto = new CreateUserDto
             {
                 UserName = request.UserName,
@@ -311,7 +344,8 @@ namespace OpenFindBearings.Identity.Controllers
                 Name = request.Name,
                 GivenName = request.GivenName,
                 FamilyName = request.FamilyName,
-                Nickname = request.Nickname
+                Nickname = request.Nickname,
+                TenantId = adminTenantId
             };
 
             var result = await _userService.CreateAsync(dto);
@@ -349,6 +383,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<object>>> AdminUpdateUser(Guid id, [FromBody] AdminUpdateUserRequest request)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
             var dto = new UpdateUserDto
             {
                 Name = request.Name,
@@ -413,6 +453,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<object>>> AdminDeleteUser(Guid id)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
             var result = await _userService.DeleteAsync(id);
 
             if (!result.IsSuccess)
@@ -434,6 +480,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<object>>> AdminToggleUserStatus(Guid id, [FromBody] ToggleUserStatusRequest request)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
             ServiceResult result;
             if (request.Enable)
             {
@@ -464,6 +516,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<object>>> AdminUnlockUser(Guid id)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
             var result = await _userService.UnlockAsync(id);
 
             if (!result.IsSuccess)
@@ -485,6 +543,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<string>>> AdminResetPassword(Guid id, [FromBody] AdminResetPasswordRequest request)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<string>(this, "User not found");
+            }
+
             var result = await _userService.ResetPasswordAsync(id, request.NewPassword);
 
             if (!result.IsSuccess)
@@ -506,6 +570,12 @@ namespace OpenFindBearings.Identity.Controllers
         [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<ApiResponse<object>>> AdminRestoreUser(Guid id)
         {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
             var result = await _userService.RestoreAsync(id);
 
             if (!result.IsSuccess)
@@ -534,6 +604,27 @@ namespace OpenFindBearings.Identity.Controllers
         private string? GetCurrentUserName()
         {
             return User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email);
+        }
+
+        /// <summary>
+        /// 验证指定用户是否属于本租户，返回 UserDto 或 null
+        /// </summary>
+        private async Task<UserDto?> GetTenantUserAsync(Guid id)
+        {
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null) return null;
+
+            // 验证管理员的 JWT tenant_id 与目标用户的 TenantId 匹配
+            var adminTenantIdClaim = User.FindFirst("tenant_id")?.Value;
+            if (string.IsNullOrEmpty(adminTenantIdClaim) || !Guid.TryParse(adminTenantIdClaim, out var adminTid))
+            {
+                _logger.LogWarning("GetTenantUserAsync: JWT 缺少 tenant_id 声明, 拒绝访问, UserId={Id}", id);
+                return null;
+            }
+
+            if (user.TenantId != adminTid) return null;
+
+            return user;
         }
 
         #endregion

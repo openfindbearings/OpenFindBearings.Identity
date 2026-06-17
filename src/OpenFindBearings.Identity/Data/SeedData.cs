@@ -4,6 +4,7 @@ using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Models.ValueObjects;
 using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore.Models;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace OpenFindBearings.Identity.Data
@@ -41,8 +42,8 @@ namespace OpenFindBearings.Identity.Data
                 await SeedRolesAsync(roleManager, logger);
                 await SeedUsersAsync(userManager, logger);
                 await SeedUserRolesAsync(userManager, roleManager, logger);
-                await SeedClientsAsync(appManager, logger);
-                await SeedScopesAsync(scopeManager, logger);
+                await SeedClientsAsync(appManager, context, logger);
+                await SeedScopesAsync(scopeManager, context, logger);
 
                 logger.LogInformation("数据库初始化成功");
             }
@@ -64,21 +65,30 @@ namespace OpenFindBearings.Identity.Data
 
             logger.LogInformation("开始初始化租户数据...");
 
-            var openFindBearingsId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
-            var tenant = new Tenant
+            var tenants = new[]
             {
-                Id = openFindBearingsId,
-                Name = "OpenFindBearings",
-                Description = "OpenFindBearings 轴承信息管理系统",
-                IsEnabled = true,
-                CreatedAt = DateTime.UtcNow
+                new Tenant
+                {
+                    Id = TenantConstants.SystemTenantId,
+                    Name = TenantConstants.SystemRealm,
+                    Description = "Identity 认证中心系统管理",
+                    IsEnabled = true,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Tenant
+                {
+                    Id = TenantConstants.OpenFindBearingsTenantId,
+                    Name = TenantConstants.OpenFindBearingsRealm,
+                    Description = "OpenFindBearings 轴承信息管理系统",
+                    IsEnabled = true,
+                    CreatedAt = DateTime.UtcNow
+                }
             };
 
-            context.Tenants.Add(tenant);
+            context.Tenants.AddRange(tenants);
             await context.SaveChangesAsync();
 
-            logger.LogInformation("租户数据初始化完成，添加租户: {TenantName}", tenant.Name);
+            logger.LogInformation("租户数据初始化完成，共添加 {Count} 个租户", tenants.Length);
         }
 
         #endregion
@@ -105,7 +115,12 @@ namespace OpenFindBearings.Identity.Data
 
             foreach (var role in roles)
             {
-                await roleManager.CreateAsync(role);
+                var result = await roleManager.CreateAsync(role);
+                if (!result.Succeeded)
+                {
+                    logger.LogWarning("创建角色失败: {Name}, Errors: {Errors}",
+                        role.Name, string.Join(", ", result.Errors.Select(e => e.Description)));
+                }
             }
 
             logger.LogInformation("角色数据初始化完成，共添加 {Count} 个角色", roles.Length);
@@ -125,19 +140,19 @@ namespace OpenFindBearings.Identity.Data
 
             logger.LogInformation("开始初始化用户数据...");
 
-            var users = new List<OidcUser>
+            var usersWithPasswords = new[]
             {
-                CreateAdminUser(),
-                CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"),
-                CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"),
-                CreateTestUser("wangwu", "王五", "wangwu@example.com", null),
-                CreateLockedUser(),
-                CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005")
+                (User: CreateSystemAdminUser(), Password: "Admin@123456"),
+                (User: CreateAdminUser(),        Password: "Admin@123456"),
+                (User: CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"), Password: "User@123456"),
+                (User: CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"), Password: "User@123456"),
+                (User: CreateTestUser("wangwu", "王五", "wangwu@example.com", null), Password: "User@123456"),
+                (User: CreateLockedUser(), Password: "Locked@123456"),
+                (User: CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005"), Password: "Test@123456")
             };
 
-            foreach (var user in users)
+            foreach (var (user, password) in usersWithPasswords)
             {
-                var password = GetUserPassword(user.UserName!);
                 var result = await userManager.CreateAsync(user, password);
 
                 if (!result.Succeeded)
@@ -157,18 +172,36 @@ namespace OpenFindBearings.Identity.Data
                 }
             }
 
-            logger.LogInformation("用户数据初始化完成，共添加 {Count} 个用户", users.Count);
+            logger.LogInformation("用户数据初始化完成，共添加 {Count} 个用户", usersWithPasswords.Length);
         }
 
-        private static string GetUserPassword(string userName)
+        private static OidcUser CreateSystemAdminUser()
         {
-            return userName switch
-            {
-                "admin" => "Admin@123456",
-                "lockeduser" => "Locked@123456",
-                "testuser" => "Test@123456",
-                _ => "User@123456"
-            };
+            var user = OidcUser.Create(
+                userName: "admin",
+                email: "system@example.com",
+                tenantId: TenantConstants.SystemTenantId,
+                phoneNumber: "+8613800000099",
+                name: "系统管理员",
+                givenName: "系统",
+                familyName: "管理员");
+
+            SetIdViaReflection(user, TenantConstants.SystemAdminUserId);
+
+            user.UpdateProfile(
+                name: "系统管理员",
+                givenName: "系统",
+                familyName: "管理员",
+                nickname: "admin");
+
+            user.SetPreferredUsername("admin");
+            user.SetLocale("zh-CN");
+            user.SetZoneInfo("Asia/Shanghai");
+
+            user.ConfirmEmail();
+            user.ConfirmPhoneNumber();
+
+            return user;
         }
 
         private static OidcUser CreateAdminUser()
@@ -176,16 +209,16 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: "admin",
                 email: "admin@example.com",
-                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                tenantId: TenantConstants.OpenFindBearingsTenantId,
                 phoneNumber: "+8613800000001",
-                name: "系统管理员",
+                name: "业务管理员",
                 givenName: "管理",
                 familyName: "员");
 
-            SetIdViaReflection(user, Guid.NewGuid());
+            SetIdViaReflection(user, TenantConstants.BusinessAdminUserId);
 
             user.UpdateProfile(
-                name: "系统管理员",
+                name: "业务管理员",
                 givenName: "管理",
                 familyName: "员",
                 nickname: "admin",
@@ -228,7 +261,7 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: username,
                 email: email,
-                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                tenantId: TenantConstants.OpenFindBearingsTenantId,
                 phoneNumber: phoneNumber,
                 name: name,
                 givenName: givenName,
@@ -279,7 +312,7 @@ namespace OpenFindBearings.Identity.Data
             var user = OidcUser.Create(
                 userName: "lockeduser",
                 email: "locked@example.com",
-                tenantId: Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                tenantId: TenantConstants.OpenFindBearingsTenantId,
                 phoneNumber: "+8613800000004",
                 name: "锁定用户",
                 givenName: "锁定",
@@ -344,24 +377,37 @@ namespace OpenFindBearings.Identity.Data
         {
             logger.LogInformation("开始初始化用户角色关联数据...");
 
-            var admin = await userManager.FindByNameAsync("admin");
+            var systemAdminId = TenantConstants.SystemAdminUserId;
+            var businessAdminId = TenantConstants.BusinessAdminUserId;
+            var systemAdmin = await userManager.FindByIdAsync(systemAdminId.ToString());
+            var businessAdmin = await userManager.FindByIdAsync(businessAdminId.ToString());
             var superAdminRole = await roleManager.FindByNameAsync("SuperAdmin");
             var adminRole = await roleManager.FindByNameAsync("Admin");
             var userRole = await roleManager.FindByNameAsync("User");
             var testUserRole = await roleManager.FindByNameAsync("TestUser");
 
-            if (admin != null)
+            if (systemAdmin != null)
             {
                 if (superAdminRole != null)
-                    await userManager.AddToRoleAsync(admin, superAdminRole.Name!);
+                    await userManager.AddToRoleAsync(systemAdmin, superAdminRole.Name!);
                 if (adminRole != null)
-                    await userManager.AddToRoleAsync(admin, adminRole.Name!);
+                    await userManager.AddToRoleAsync(systemAdmin, adminRole.Name!);
             }
 
+            if (businessAdmin != null)
+            {
+                if (superAdminRole != null)
+                    await userManager.AddToRoleAsync(businessAdmin, superAdminRole.Name!);
+                if (adminRole != null)
+                    await userManager.AddToRoleAsync(businessAdmin, adminRole.Name!);
+            }
+
+            var excludeUsernames = new[] { "testuser" };
+            var excludeIds = new[] { systemAdminId, businessAdminId };
             var users = await userManager.Users.ToListAsync();
             foreach (var user in users)
             {
-                if (user.UserName != "admin" && user.UserName != "testuser" && userRole != null)
+                if (!excludeIds.Contains(user.Id) && !excludeUsernames.Contains(user.UserName!) && userRole != null)
                 {
                     await userManager.AddToRoleAsync(user, userRole.Name!);
                 }
@@ -380,143 +426,155 @@ namespace OpenFindBearings.Identity.Data
 
         #region OpenIddict 客户端和 Scope 初始化
 
-        private static async Task SeedClientsAsync(IOpenIddictApplicationManager appManager, ILogger logger)
+        private static async Task SeedClientsAsync(IOpenIddictApplicationManager appManager, ApplicationDbContext context, ILogger logger)
         {
-            if (await appManager.FindByClientIdAsync("sync-client") == null)
+            var ofbTenantId = TenantConstants.OpenFindBearingsTenantId;
+            var clientIds = new[] { "sync-client", "maui-client", "web-client", "admin_client" };
+
+            foreach (var clientId in clientIds)
             {
-                await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+                if (await appManager.FindByClientIdAsync(clientId) != null)
                 {
-                    ClientId = "sync-client",
-                    ClientSecret = "388D45FA-B36B-4988-BA59-B187D329C207",
-                    DisplayName = "同步服务客户端",
-                    Permissions =
-                    {
-                        Permissions.Endpoints.Token,
-                        Permissions.GrantTypes.ClientCredentials,
-                        Permissions.GrantTypes.RefreshToken,
-                        Permissions.Scopes.Profile,
-                        Permissions.Scopes.Email,
-                        Permissions.Scopes.Roles,
-                        Permissions.Prefixes.Scope + "api:sync"
-                    }
-                });
-                logger.LogInformation("创建同步服务客户端成功");
+                    logger.LogInformation("客户端 [{ClientId}] 已存在，跳过", clientId);
+                    continue;
+                }
+                logger.LogInformation("开始创建客户端 [{ClientId}]...", clientId);
             }
 
-            if (await appManager.FindByClientIdAsync("maui-client") == null)
+            async Task SetTenantIdAsync(string clientId, Guid tenantId)
             {
-                await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+                var apps = context.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+                var app = await apps.AsTracking().FirstOrDefaultAsync(a => a.ClientId == clientId);
+                if (app != null)
                 {
-                    ClientId = "maui-client",
-                    ClientType = ClientTypes.Public,
-                    DisplayName = "MAUI 客户端",
-                    Permissions =
-                    {
-                        Permissions.Endpoints.Token,
-                        Permissions.GrantTypes.Password,
-                        Permissions.GrantTypes.RefreshToken,
-                        Permissions.Scopes.Profile,
-                        Permissions.Scopes.Email,
-                        Permissions.Scopes.Roles,
-                        Permissions.Prefixes.Scope + "api:maui"
-                    }
-                });
-                logger.LogInformation("创建 MAUI 客户端成功");
+                    context.Entry(app).Property("TenantId").CurrentValue = tenantId;
+                    await context.SaveChangesAsync();
+                }
             }
 
-            if (await appManager.FindByClientIdAsync("web-client") == null)
+            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
             {
-                await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+                ClientId = "sync-client",
+                ClientSecret = "388D45FA-B36B-4988-BA59-B187D329C207",
+                DisplayName = "同步服务客户端",
+                Permissions =
                 {
-                    ClientId = "web-client",
-                    ClientSecret = "web-secret-123",
-                    DisplayName = "Web 客户端",
-                    RedirectUris = { new Uri("https://localhost:5002/signin-oidc") },
-                    PostLogoutRedirectUris = { new Uri("https://localhost:5002/signout-callback-oidc") },
-                    Permissions =
-                    {
-                        Permissions.Endpoints.Authorization,
-                        Permissions.Endpoints.Token,
-                        Permissions.GrantTypes.AuthorizationCode,
-                        Permissions.GrantTypes.RefreshToken,
-                        Permissions.Scopes.Profile,
-                        Permissions.Scopes.Email,
-                        Permissions.Scopes.Roles,
-                        Permissions.ResponseTypes.Code,
-                        Permissions.Prefixes.Scope + "api:web"
-                    },
-                    Requirements =
-                    {
-                        Requirements.Features.ProofKeyForCodeExchange
-                    }
-                });
-                logger.LogInformation("创建 Web 客户端成功");
-            }
+                    Permissions.Endpoints.Token,
+                    Permissions.GrantTypes.ClientCredentials,
+                    Permissions.GrantTypes.RefreshToken,
+                    Permissions.Scopes.Profile,
+                    Permissions.Scopes.Email,
+                    Permissions.Scopes.Roles,
+                    Permissions.Prefixes.Scope + "api:sync"
+                }
+            });
+            await SetTenantIdAsync("sync-client", ofbTenantId);
+            logger.LogInformation("创建客户端 [sync-client] 成功");
 
-            if (await appManager.FindByClientIdAsync("admin_client") == null)
+            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
             {
-                await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+                ClientId = "maui-client",
+                ClientType = ClientTypes.Public,
+                DisplayName = "MAUI 客户端",
+                Permissions =
                 {
-                    ClientId = "admin_client",
-                    ClientSecret = "admin-secret-key",
-                    ClientType = ClientTypes.Confidential,
-                    DisplayName = "Admin 后台管理",
-                    RedirectUris = { new Uri("https://localhost:7167/callback") },
-                    PostLogoutRedirectUris = { new Uri("https://localhost:7167/") },
-                    ConsentType = ConsentTypes.Implicit,  // 开发环境跳过同意页
-                    Permissions =
-                    {
-                        Permissions.Endpoints.Authorization,
-                        Permissions.Endpoints.Token,
-                        Permissions.GrantTypes.AuthorizationCode,
-                        Permissions.GrantTypes.RefreshToken,
-                        Permissions.ResponseTypes.Code,
-                        Permissions.Scopes.Profile,
-                        Permissions.Scopes.Email,
-                        Permissions.Scopes.Roles,
-                        Permissions.Prefixes.Scope + "openid",
-                        Permissions.Prefixes.Scope + "api:admin"
-                    }
-                });
-                logger.LogInformation("创建 Admin 客户端成功");
-            }
+                    Permissions.Endpoints.Token,
+                    Permissions.GrantTypes.Password,
+                    Permissions.GrantTypes.RefreshToken,
+                    Permissions.Scopes.Profile,
+                    Permissions.Scopes.Email,
+                    Permissions.Scopes.Roles,
+                    Permissions.Prefixes.Scope + "api:maui"
+                }
+            });
+            await SetTenantIdAsync("maui-client", ofbTenantId);
+            logger.LogInformation("创建客户端 [maui-client] 成功");
+
+            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = "web-client",
+                ClientSecret = "web-secret-123",
+                DisplayName = "Web 客户端",
+                RedirectUris = { new Uri("https://localhost:5002/signin-oidc") },
+                PostLogoutRedirectUris = { new Uri("https://localhost:5002/signout-callback-oidc") },
+                Permissions =
+                {
+                    Permissions.Endpoints.Authorization,
+                    Permissions.Endpoints.Token,
+                    Permissions.GrantTypes.AuthorizationCode,
+                    Permissions.GrantTypes.RefreshToken,
+                    Permissions.Scopes.Profile,
+                    Permissions.Scopes.Email,
+                    Permissions.Scopes.Roles,
+                    Permissions.ResponseTypes.Code,
+                    Permissions.Prefixes.Scope + "api:web"
+                },
+                Requirements =
+                {
+                    Requirements.Features.ProofKeyForCodeExchange
+                }
+            });
+            await SetTenantIdAsync("web-client", ofbTenantId);
+            logger.LogInformation("创建客户端 [web-client] 成功");
+
+            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = "admin_client",
+                ClientSecret = "admin-secret-key",
+                ClientType = ClientTypes.Confidential,
+                DisplayName = "Admin 后台管理",
+                RedirectUris = { new Uri("https://localhost:7167/callback") },
+                PostLogoutRedirectUris = { new Uri("https://localhost:7167/") },
+                ConsentType = ConsentTypes.Implicit,
+                Permissions =
+                {
+                    Permissions.Endpoints.Authorization,
+                    Permissions.Endpoints.Token,
+                    Permissions.GrantTypes.AuthorizationCode,
+                    Permissions.GrantTypes.RefreshToken,
+                    Permissions.ResponseTypes.Code,
+                    Permissions.Scopes.Profile,
+                    Permissions.Scopes.Email,
+                    Permissions.Scopes.Roles,
+                    Permissions.Prefixes.Scope + "openid",
+                    Permissions.Prefixes.Scope + "api:admin"
+                }
+            });
+            await SetTenantIdAsync("admin_client", ofbTenantId);
+            logger.LogInformation("创建客户端 [admin_client] 成功");
         }
 
-        private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ILogger logger)
+        private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ApplicationDbContext context, ILogger logger)
         {
-            if (await scopeManager.FindByNameAsync("api:sync") is null)
+            var ofbTenantId = TenantConstants.OpenFindBearingsTenantId;
+
+            async Task CreateScopeWithTenantAsync(string name)
             {
-                try
+                if (await scopeManager.FindByNameAsync(name) != null)
                 {
-                    await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
-                    {
-                        Name = "api:sync",
-                        Resources = { ApiResourceConstants.BaseApi }
-                    });
-                    logger.LogInformation("创建 Scope [api:sync] 成功");
+                    logger.LogInformation("Scope [{Name}] 已存在，跳过", name);
+                    return;
                 }
-                catch (Exception ex)
+
+                await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
                 {
-                    logger.LogError($"创建 Scope [api:sync] 失败：{ex.Message}");
+                    Name = name,
+                    Resources = { ApiResourceConstants.BaseApi }
+                });
+
+                var scopes = context.Set<OpenIddictEntityFrameworkCoreScope<Guid>>();
+                var scope = await scopes.AsTracking().FirstOrDefaultAsync(s => s.Name == name);
+                if (scope != null)
+                {
+                    context.Entry(scope).Property("TenantId").CurrentValue = ofbTenantId;
+                    await context.SaveChangesAsync();
                 }
+
+                logger.LogInformation("创建 Scope [{Name}] 成功", name);
             }
 
-            if (await scopeManager.FindByNameAsync("api:admin") is null)
-            {
-                try
-                {
-                    await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
-                    {
-                        Name = "api:admin",
-                        Resources = { ApiResourceConstants.BaseApi }
-                    });
-                    logger.LogInformation("创建 Scope [api:admin] 成功");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError($"创建 Scope [api:admin] 失败：{ex.Message}");
-                }
-            }
+            await CreateScopeWithTenantAsync("api:sync");
+            await CreateScopeWithTenantAsync("api:admin");
         }
 
         #endregion

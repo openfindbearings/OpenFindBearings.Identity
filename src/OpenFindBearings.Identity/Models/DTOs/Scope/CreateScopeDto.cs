@@ -27,5 +27,11 @@ namespace OpenFindBearings.Identity.Models.DTOs.Scope
         /// 关联的资源列表
         /// </summary>
         public IReadOnlyList<string>? Resources { get; set; }
+
+        /// <summary>
+        /// 所属租户 ID
+        /// </summary>
+        [Required(ErrorMessage = "请选择租户")]
+        public Guid TenantId { get; set; }
     }
 }

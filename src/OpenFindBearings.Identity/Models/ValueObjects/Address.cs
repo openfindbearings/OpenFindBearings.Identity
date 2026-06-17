@@ -9,7 +9,7 @@ namespace OpenFindBearings.Identity.Models.ValueObjects
         /// <summary>
         /// 完整格式化的地址
         /// </summary>
-        public string? Formatted { get; init; }
+        public string Formatted { get; init; } = string.Empty;
         
         /// <summary>
         /// 街道地址

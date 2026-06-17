@@ -1,0 +1,83 @@
+@model PaginatedResult<ClientDto>
+@{
+    ViewData["Title"] = "客户端管理";
+}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">客户端管理</h1>
+    <a asp-action="Create" class="btn btn-primary">新建客户端</a>
+</div>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        @success
+        @if (TempData["NewSecret"] is string secret)
+        {
+            <div class="mt-2"><strong>新密钥：</strong><code>@secret</code></div>
+        }
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger alert-dismissible fade show">@error<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+}
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <input type="text" name="search" class="form-control" placeholder="搜索客户端..." value="@ViewBag.Search" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">搜索</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>ClientId</th>
+                <th>显示名称</th>
+                <th>类型</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td><code>@item.ClientId</code></td>
+                    <td>@item.DisplayName</td>
+                    <td>@item.ClientType</td>
+                    <td>
+                        <a asp-action="Edit" asp-route-clientId="@item.ClientId" class="btn btn-sm btn-outline-primary">编辑</a>
+                        <form asp-action="RegenerateSecret" asp-route-clientId="@item.ClientId" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-warning">重新生成密钥</button>
+                        </form>
+                        <form asp-action="Delete" asp-route-clientId="@item.ClientId" method="post" class="d-inline" onsubmit="return confirm('确定删除客户端 @item.ClientId？')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Items.Any())
+            {
+                <tr><td colspan="4" class="text-center text-muted">暂无客户端</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<nav>
+    <ul class="pagination">
+        @for (int i = 1; i <= Model.TotalPages; i++)
+        {
+            <li class="page-item @(i == Model.PageIndex ? "active" : "")">
+                <a class="page-link" asp-route-page="@i" asp-route-search="@ViewBag.Search">@i</a>
+            </li>
+        }
+    </ul>
+</nav>

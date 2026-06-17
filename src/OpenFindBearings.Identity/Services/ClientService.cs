@@ -1,76 +1,105 @@
-﻿using OpenFindBearings.Identity.Data.Repositories.Interfaces;
+﻿using Microsoft.EntityFrameworkCore;
+using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.DTOs;
 using OpenFindBearings.Identity.Models.DTOs.Client;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore.Models;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace OpenFindBearings.Identity.Services
 {
-    /// <summary>
-    /// 客户端服务实现
-    /// </summary>
     public class ClientService : IClientService
     {
         private readonly IOpenIddictApplicationManager _applicationManager;
         private readonly IAuditLogRepository _auditLogRepo;
+        private readonly ApplicationDbContext _dbContext;
 
         public ClientService(
             IOpenIddictApplicationManager applicationManager,
-            IAuditLogRepository auditLogRepo)
+            IAuditLogRepository auditLogRepo,
+            ApplicationDbContext dbContext)
         {
             _applicationManager = applicationManager;
             _auditLogRepo = auditLogRepo;
+            _dbContext = dbContext;
         }
 
-        /// <inheritdoc/>
-        public async Task<PaginatedResult<ClientDto>> GetPagedAsync(int page, int size, string? search = null, CancellationToken ct = default)
+        public async Task<PaginatedResult<ClientDto>> GetPagedAsync(int page, int size, string? search = null, Guid? tenantId = null, CancellationToken ct = default)
         {
-            // 收集所有客户端（这种方式适合客户端数量不多的场景）
-            var allClients = new List<ClientDto>();
+            var appsSet = _dbContext.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
 
-            await foreach (var app in _applicationManager.ListAsync())
+            var query = appsSet.AsNoTracking();
+
+            if (tenantId.HasValue)
             {
-                var clientId = await _applicationManager.GetClientIdAsync(app, ct);
-                var displayName = await _applicationManager.GetDisplayNameAsync(app, ct);
-
-                if (!string.IsNullOrEmpty(search) && !clientId!.Contains(search) && !displayName!.Contains(search))
-                    continue;
-
-                allClients.Add(new ClientDto
-                {
-                    ClientId = clientId!,
-                    DisplayName = displayName!,
-                    ClientType = await _applicationManager.GetClientTypeAsync(app, ct)
-                });
+                query = query.Where(a => EF.Property<Guid?>(a, "TenantId") == tenantId.Value);
             }
 
-            var total = allClients.Count;
-            var clients = allClients
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(a => a.ClientId != null &&
+                    (a.ClientId.Contains(search) || (a.DisplayName != null && a.DisplayName.Contains(search))));
+            }
+
+            var total = await query.CountAsync(ct);
+            var items = await query
+                .OrderBy(a => a.ClientId)
                 .Skip((page - 1) * size)
                 .Take(size)
-                .ToList();
+                .ToListAsync(ct);
+
+            var clients = items.Select(a => new ClientDto
+            {
+                ClientId = a.ClientId ?? string.Empty,
+                DisplayName = a.DisplayName ?? string.Empty,
+                ClientType = a.ClientType ?? string.Empty
+            }).ToList();
 
             return new PaginatedResult<ClientDto>(clients, total, page, size);
         }
 
-        /// <inheritdoc/>
+        public async Task<bool> IsClientInTenantAsync(string clientId, Guid? tenantId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(clientId)) return false;
+            if (!tenantId.HasValue) return true;
+
+            var appsSet = _dbContext.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+            return await appsSet.AnyAsync(a =>
+                a.ClientId == clientId &&
+                EF.Property<Guid?>(a, "TenantId") == tenantId.Value, ct);
+        }
+
         public async Task<ClientDto?> GetByClientIdAsync(string clientId, CancellationToken ct = default)
         {
-            var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
+            var appsSet = _dbContext.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+            var app = await appsSet.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.ClientId == clientId, ct);
             if (app == null) return null;
 
             return new ClientDto
             {
-                ClientId = await _applicationManager.GetClientIdAsync(app, ct) ?? string.Empty,
-                DisplayName = await _applicationManager.GetDisplayNameAsync(app, ct) ?? string.Empty,
-                ClientType = await _applicationManager.GetClientTypeAsync(app, ct) ?? string.Empty
+                ClientId = app.ClientId ?? string.Empty,
+                DisplayName = app.DisplayName ?? string.Empty,
+                ClientType = app.ClientType ?? string.Empty
             };
         }
 
-        /// <inheritdoc/>
-        public async Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, CancellationToken ct = default)
+        public async Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, Guid? tenantId = null, CancellationToken ct = default)
         {
+            if (string.IsNullOrEmpty(request.ClientId))
+            {
+                return ServiceResult<ClientDto>.Failure(new[]
+                {
+                    new ServiceError
+                    {
+                        Code = "ClientIdRequired",
+                        Description = "客户端 ID 不能为空"
+                    }
+                });
+            }
+
             var existing = await _applicationManager.FindByClientIdAsync(request.ClientId, ct);
             if (existing != null)
             {
@@ -92,19 +121,16 @@ namespace OpenFindBearings.Identity.Services
                 ConsentType = ConsentTypes.Explicit
             };
 
-            // 添加权限
             descriptor.Permissions.Add(Permissions.Endpoints.Token);
             descriptor.Permissions.Add(Permissions.Endpoints.Authorization);
             descriptor.Permissions.Add(Permissions.GrantTypes.AuthorizationCode);
             descriptor.Permissions.Add(Permissions.GrantTypes.RefreshToken);
 
-            // 添加回调地址
             if (!string.IsNullOrEmpty(request.RedirectUri))
             {
                 descriptor.RedirectUris.Add(new Uri(request.RedirectUri));
             }
 
-            // 添加作用域
             if (request.Scopes != null)
             {
                 foreach (var scope in request.Scopes)
@@ -115,6 +141,18 @@ namespace OpenFindBearings.Identity.Services
 
             await _applicationManager.CreateAsync(descriptor, ct);
 
+            // 设置 TenantId 影子属性
+            if (tenantId.HasValue)
+            {
+                var appsSet = _dbContext.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+                var app = await appsSet.AsTracking().FirstOrDefaultAsync(a => a.ClientId == request.ClientId, ct);
+                if (app != null)
+                {
+                    _dbContext.Entry(app).Property("TenantId").CurrentValue = tenantId.Value;
+                    await _dbContext.SaveChangesAsync(ct);
+                }
+            }
+
             await _auditLogRepo.LogClientActionAsync(null, "System", "CreateClient", request.ClientId, null, true, ct);
 
             return ServiceResult<ClientDto>.Success(new ClientDto
@@ -124,7 +162,6 @@ namespace OpenFindBearings.Identity.Services
             });
         }
 
-        /// <inheritdoc/>
         public async Task<ServiceResult> UpdateAsync(string clientId, UpdateClientDto request, CancellationToken ct = default)
         {
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
@@ -140,14 +177,12 @@ namespace OpenFindBearings.Identity.Services
                 });
             }
 
-            // OpenIddict 更新使用 descriptor
             var descriptor = new OpenIddictApplicationDescriptor
             {
                 ClientId = clientId,
                 DisplayName = request.DisplayName
             };
 
-            // 复制现有权限
             var permissions = await _applicationManager.GetPermissionsAsync(app, ct);
             foreach (var permission in permissions)
             {
@@ -160,7 +195,6 @@ namespace OpenFindBearings.Identity.Services
             return ServiceResult.Success();
         }
 
-        /// <inheritdoc/>
         public async Task<ServiceResult> DeleteAsync(string clientId, CancellationToken ct = default)
         {
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);
@@ -182,7 +216,6 @@ namespace OpenFindBearings.Identity.Services
             return ServiceResult.Success();
         }
 
-        /// <inheritdoc/>
         public async Task<ServiceResult<string>> RegenerateSecretAsync(string clientId, CancellationToken ct = default)
         {
             var app = await _applicationManager.FindByClientIdAsync(clientId, ct);

@@ -1,0 +1,64 @@
+@{
+    ViewData["Title"] = "管理后台";
+}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">管理后台</h1>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">用户总数</h5>
+                <p class="card-text display-6">@ViewBag.UserCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success">
+            <div class="card-body">
+                <h5 class="card-title">租户数</h5>
+                <p class="card-text display-6">@ViewBag.TenantCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-info">
+            <div class="card-body">
+                <h5 class="card-title">客户端</h5>
+                <p class="card-text display-6">@ViewBag.ClientCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Scope</h5>
+                <p class="card-text display-6">@ViewBag.ScopeCount</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-info-circle"></i> 快速导航
+    </div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <a asp-controller="Users" asp-action="Index" class="btn btn-outline-primary w-100">用户管理</a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="Application" asp-action="Index" class="btn btn-outline-primary w-100">客户端管理</a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="Scope" asp-action="Index" class="btn btn-outline-primary w-100">Scope 管理</a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="Tenant" asp-action="Index" class="btn btn-outline-primary w-100">租户管理</a>
+            </div>
+        </div>
+    </div>
+</div>

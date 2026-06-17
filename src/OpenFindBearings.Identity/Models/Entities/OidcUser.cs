@@ -21,7 +21,7 @@ namespace OpenFindBearings.Identity.Models.Entities
         /// </summary>
         /// <param name="userName">用户名</param>
         /// <param name="email">邮箱</param>
-        /// <param name="tenantId">租户标识</param>
+        /// <param name="tenantId">租户标识（null 表示系统用户）</param>
         /// <param name="phoneNumber">手机号（可选）</param>
         /// <param name="name">全名（可选）</param>
         /// <param name="givenName">名（可选）</param>
@@ -30,7 +30,7 @@ namespace OpenFindBearings.Identity.Models.Entities
         public static OidcUser Create(
             string userName,
             string? email,
-            Guid tenantId,
+            Guid? tenantId,
             string? phoneNumber = null,
             string? name = null,
             string? givenName = null,
@@ -138,9 +138,9 @@ namespace OpenFindBearings.Identity.Models.Entities
 
         /// <summary>
         /// 租户标识
-        /// 每个用户必须归属一个租户，用于多租户隔离
+        /// null 表示系统用户（不归属任何租户）
         /// </summary>
-        public Guid TenantId { get; set; }
+        public Guid? TenantId { get; set; }
 
         /// <summary>
         /// 账户是否启用（业务禁用，由管理员控制）

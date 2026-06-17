@@ -27,14 +27,29 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<UserDto?> GetByUsernameAsync(string username, CancellationToken ct = default);
 
         /// <summary>
+        /// 根据用户名和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByUsernameAsync(string username, Guid tenantId, CancellationToken ct = default);
+
+        /// <summary>
         /// 根据邮箱获取用户
         /// </summary>
         Task<UserDto?> GetByEmailAsync(string email, CancellationToken ct = default);
 
         /// <summary>
+        /// 根据邮箱和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByEmailAsync(string email, Guid tenantId, CancellationToken ct = default);
+
+        /// <summary>
         /// 根据手机号获取用户
         /// </summary>
         Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, CancellationToken ct = default);
+
+        /// <summary>
+        /// 根据手机号和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, Guid tenantId, CancellationToken ct = default);
 
         /// <summary>
         /// 获取用户总数

@@ -133,6 +133,7 @@ namespace OpenFindBearings.Identity.Extensions
                 Locale = user.Locale,
                 ZoneInfo = user.ZoneInfo,
                 Address = user.Address,
+                TenantId = user.TenantId,
                 IsEnabled = user.IsEnabled,
                 IsActive = user.IsActive,
                 LastLoginAt = user.LastLoginAt,

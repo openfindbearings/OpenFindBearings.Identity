@@ -111,9 +111,9 @@
         public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
-        /// 租户标识
+        /// 租户标识（null 表示系统用户）
         /// </summary>
-        public Guid TenantId { get; set; }
+        public Guid? TenantId { get; set; }
 
         /// <summary>
         /// 角色列表
