@@ -5,6 +5,7 @@ using OpenFindBearings.Identity.Models.DTOs.AuditLog;
 using OpenFindBearings.Identity.Models.Requests;
 using OpenFindBearings.Identity.Models.Responses;
 using OpenFindBearings.Identity.Services.Interfaces;
+using OpenIddict.Validation.AspNetCore;
 
 namespace OpenFindBearings.Identity.Controllers
 {
@@ -13,7 +14,7 @@ namespace OpenFindBearings.Identity.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, Roles = "SuperAdmin,Admin")]
     public class AuditLogController : ControllerBase
     {
         private readonly IAuditLogService _auditLogService;

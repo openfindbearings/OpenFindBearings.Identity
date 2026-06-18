@@ -41,6 +41,7 @@ namespace OpenFindBearings.Identity.Services
      string? search = null,
      UserStatusFilter? status = null,
      string? role = null,
+     Guid? tenantId = null,
      DateTimeOffset? dateFrom = null,
      DateTimeOffset? dateTo = null,
      DateTimeOffset? lastLoginFrom = null,
@@ -48,6 +49,12 @@ namespace OpenFindBearings.Identity.Services
      CancellationToken ct = default)
         {
             var query = _userManager.Users.Where(u => u.IsActive);
+
+            // 租户过滤
+            if (tenantId.HasValue)
+            {
+                query = query.Where(u => u.TenantId == tenantId.Value);
+            }
 
             // 搜索过滤（用户名/邮箱/姓名/手机号）
             if (!string.IsNullOrEmpty(search))
@@ -113,7 +120,8 @@ namespace OpenFindBearings.Identity.Services
 
             var total = users.Count;
             var pagedUsers = users
-                .OrderByDescending(u => u.CreatedAt)
+                .OrderBy(u => u.TenantId)
+                .ThenBy(u => u.UserName)
                 .Skip((page - 1) * size)
                 .Take(size)
                 .ToList();
@@ -132,14 +140,34 @@ namespace OpenFindBearings.Identity.Services
         /// <inheritdoc/>
         public async Task<UserDto?> GetByUsernameAsync(string username, CancellationToken ct = default)
         {
-            var user = await _userManager.FindByNameAsync(username);
+            var normalizedUsername = username.ToUpperInvariant();
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.NormalizedUserName == normalizedUsername, ct);
+            return user != null ? user.ToDto() : null;
+        }
+
+        public async Task<UserDto?> GetByUsernameAsync(string username, Guid tenantId, CancellationToken ct = default)
+        {
+            var normalizedUsername = username.ToUpperInvariant();
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.NormalizedUserName == normalizedUsername && u.TenantId == tenantId, ct);
             return user != null ? user.ToDto() : null;
         }
 
         /// <inheritdoc/>
         public async Task<UserDto?> GetByEmailAsync(string email, CancellationToken ct = default)
         {
-            var user = await _userManager.FindByEmailAsync(email);
+            var normalizedEmail = _userManager.NormalizeEmail(email);
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
+            return user != null ? user.ToDto() : null;
+        }
+
+        public async Task<UserDto?> GetByEmailAsync(string email, Guid tenantId, CancellationToken ct = default)
+        {
+            var normalizedEmail = _userManager.NormalizeEmail(email);
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail && u.TenantId == tenantId, ct);
             return user != null ? user.ToDto() : null;
         }
 
@@ -151,6 +179,17 @@ namespace OpenFindBearings.Identity.Services
 
             var user = await _userManager.Users
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber && u.IsActive, ct);
+
+            return user != null ? user.ToDto() : null;
+        }
+
+        public async Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, Guid tenantId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(phoneNumber))
+                return null;
+
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber && u.IsActive && u.TenantId == tenantId, ct);
 
             return user != null ? user.ToDto() : null;
         }
@@ -168,9 +207,19 @@ namespace OpenFindBearings.Identity.Services
         /// <inheritdoc/>
         public async Task<ServiceResult<UserDto>> CreateAsync(CreateUserDto request, CancellationToken ct = default)
         {
+            if (request.TenantId == null)
+            {
+                return ServiceResult<UserDto>.Failure(new ServiceError
+                {
+                    Code = "TenantRequired",
+                    Description = "创建用户时必须指定租户"
+                });
+            }
+
             var user = OidcUser.Create(
                 userName: request.UserName,
                 email: request.Email,
+                tenantId: request.TenantId,
                 phoneNumber: request.PhoneNumber,
                 name: request.Name,
                 givenName: request.GivenName,

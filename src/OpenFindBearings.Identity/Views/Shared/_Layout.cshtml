@@ -1,47 +1,71 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - DefaultMvc</title>
-    <script type="importmap"></script>
+    <title>@ViewData["Title"] - OpenFindBearings</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/DefaultMvc.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">DefaultMvc</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                    </ul>
-                </div>
+    <div class="d-flex" style="min-height: 100vh;">
+        <nav class="d-flex flex-column flex-shrink-0 p-3 text-bg-dark" style="width: 240px;">
+            <a asp-controller="Home" asp-action="Index" class="d-flex align-items-center mb-3 text-white text-decoration-none">
+                <span class="fs-5 fw-semibold">OpenFindBearings</span>
+            </a>
+            <hr />
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item">
+                    <a asp-controller="Home" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Home" ? "active" : "")">
+                        <i class="bi bi-speedometer2 me-2"></i>仪表盘
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Tenant" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Tenant" ? "active" : "")">
+                        <i class="bi bi-building me-2"></i>租户管理
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Users" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Users" ? "active" : "")">
+                        <i class="bi bi-people me-2"></i>用户管理
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Application" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Application" ? "active" : "")">
+                        <i class="bi bi-key me-2"></i>客户端管理
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Scope" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Scope" ? "active" : "")">
+                        <i class="bi bi-shield-check me-2"></i>Scope 管理
+                    </a>
+                </li>
+            </ul>
+            <hr />
+            <div class="dropdown">
+                <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-2 fs-5"></i>
+                    <strong>管理员</strong>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-dark text-small shadow">
+                    <li><a class="dropdown-item" href="/profile/change-password">修改密码</a></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form action="/Account/Logout" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="dropdown-item">退出登录</button>
+                        </form>
+                    </li>
+                </ul>
             </div>
         </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
+
+        <main class="flex-grow-1 p-4" style="background: #f8f9fa;">
             @RenderBody()
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - DefaultMvc - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
-    </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

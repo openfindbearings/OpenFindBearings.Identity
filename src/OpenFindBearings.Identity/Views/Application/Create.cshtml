@@ -1,0 +1,53 @@
+@using OpenFindBearings.Identity.Models.DTOs.Tenant
+@model CreateClientDto
+@{
+    ViewData["Title"] = "新建客户端";
+}
+
+<h2>新建客户端</h2>
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label asp-for="TenantId" class="form-label">所属租户</label>
+        <select asp-for="TenantId" class="form-select" asp-items="@(new SelectList(ViewBag.Tenants, "Id", "Name"))">
+            <option value="">-- 请选择租户 --</option>
+        </select>
+        <span asp-validation-for="TenantId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ClientId" class="form-label"></label>
+        <input asp-for="ClientId" class="form-control" />
+        <span asp-validation-for="ClientId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="DisplayName" class="form-label"></label>
+        <input asp-for="DisplayName" class="form-control" />
+        <span asp-validation-for="DisplayName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ClientSecret" class="form-label">客户端密钥（可选，公开客户端留空）</label>
+        <input asp-for="ClientSecret" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="RedirectUri" class="form-label">回调地址</label>
+        <input asp-for="RedirectUri" class="form-control" placeholder="https://example.com/callback" />
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="IsPublic" class="form-check-input" />
+        <label asp-for="IsPublic" class="form-check-label">公开客户端（无密钥）</label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">创建</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
+</form>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+}

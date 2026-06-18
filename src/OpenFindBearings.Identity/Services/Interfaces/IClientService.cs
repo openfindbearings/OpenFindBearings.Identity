@@ -11,7 +11,7 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 分页获取客户端列表
         /// </summary>
-        Task<PaginatedResult<ClientDto>> GetPagedAsync(int page, int size, string? search = null, CancellationToken ct = default);
+        Task<PaginatedResult<ClientDto>> GetPagedAsync(int page, int size, string? search = null, Guid? tenantId = null, CancellationToken ct = default);
 
         /// <summary>
         /// 根据 ClientId 获取客户端
@@ -19,9 +19,14 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<ClientDto?> GetByClientIdAsync(string clientId, CancellationToken ct = default);
 
         /// <summary>
+        /// 检查客户端是否属于指定租户
+        /// </summary>
+        Task<bool> IsClientInTenantAsync(string clientId, Guid? tenantId, CancellationToken ct = default);
+
+        /// <summary>
         /// 创建新客户端
         /// </summary>
-        Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, CancellationToken ct = default);
+        Task<ServiceResult<ClientDto>> CreateAsync(CreateClientDto request, Guid? tenantId = null, CancellationToken ct = default);
 
         /// <summary>
         /// 更新客户端

@@ -26,13 +26,16 @@ namespace OpenFindBearings.Identity.Extensions
         /// </summary>
         public static IServiceCollection AddIdentityService(this IServiceCollection services)
         {
+            // 在 AddIdentity 前注册租户感知验证器，防止默认 UserValidator 全局用户名唯一校验
+            services.AddScoped<IUserValidator<OidcUser>, TenantAwareUserValidator>();
+
             services.AddIdentity<OidcUser, IdentityRole<Guid>>(options =>
             {
-                //options.Password.RequireDigit = true;
-                //options.Password.RequiredLength = 6;
-                //options.Password.RequireNonAlphanumeric = false;
-                //options.Password.RequireUppercase = true;
-                //options.Password.RequireLowercase = true;
+                options.Password.RequireDigit = false;
+                options.Password.RequiredLength = 6;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireLowercase = false;
                 //options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 //options.Lockout.MaxFailedAccessAttempts = 5;
                 //options.Lockout.AllowedForNewUsers = true;
@@ -57,7 +60,6 @@ namespace OpenFindBearings.Identity.Extensions
                     b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
 
                 // Register the entity sets needed by OpenIddict.
-                // Note: use the generic overload if you need to replace the default OpenIddict entities.
                 options.UseOpenIddict();
             });
 
@@ -78,9 +80,9 @@ namespace OpenFindBearings.Identity.Extensions
                 .AddCore(options =>
                 {
                     // Configure OpenIddict to use the Entity Framework Core stores and models.
-                    // Note: call ReplaceDefaultEntities() to replace the default OpenIddict entities.
                     options.UseEntityFrameworkCore()
-                           .UseDbContext<ApplicationDbContext>();
+                           .UseDbContext<ApplicationDbContext>()
+                           .ReplaceDefaultEntities<Guid>();
 
                     // Enable Quartz.NET integration.
                     options.UseQuartz();
@@ -94,6 +96,7 @@ namespace OpenFindBearings.Identity.Extensions
                            .SetUserInfoEndpointUris("connect/userinfo")
                            .SetEndSessionEndpointUris("connect/logout")
                            .SetRevocationEndpointUris("/connect/revocation")
+                           .SetAuthorizationEndpointUris("/connect/authorize")
                            ;
 
                     options.AllowClientCredentialsFlow() // Enable the client credentials flow.
@@ -101,6 +104,7 @@ namespace OpenFindBearings.Identity.Extensions
                            //.AllowCustomFlow("sms")
                            //.AllowCustomFlow("wechat")
                            //.AllowCustomFlow("alipay")
+                           .AllowAuthorizationCodeFlow()  // 授权码流程（Admin 登录用）
                            .AllowRefreshTokenFlow();
 
                     // Register the signing and encryption credentials.
@@ -109,6 +113,8 @@ namespace OpenFindBearings.Identity.Extensions
                     {
                         options.AddDevelopmentEncryptionCertificate()
                                .AddDevelopmentSigningCertificate();
+                        options.UseAspNetCore()
+                               .DisableTransportSecurityRequirement();
                     }
                     else
                     {
@@ -136,7 +142,7 @@ namespace OpenFindBearings.Identity.Extensions
                     options.SetIssuer(configuration["OpenIddict:Issuer"] ?? "https://localhost:7201");
 
                     // supported scopes.
-                    options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.Phone, Scopes.Address);
+                    options.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.Phone, Scopes.Address);
 
                     // 配置令牌的有效期
                     options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10))        // A. 访问令牌有效期
@@ -144,7 +150,10 @@ namespace OpenFindBearings.Identity.Extensions
 
                     // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
                     options.UseAspNetCore()
-                           .EnableTokenEndpointPassthrough();
+                            .EnableAuthorizationEndpointPassthrough()
+                            .EnableTokenEndpointPassthrough()
+                            .EnableEndSessionEndpointPassthrough()
+                            .EnableStatusCodePagesIntegration();
                 })
 
                 // Register the OpenIddict validation components.
@@ -165,6 +174,9 @@ namespace OpenFindBearings.Identity.Extensions
         /// </summary>
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+            services.AddScoped<ITenantResolver, TenantResolver>();
+
             // 注册 Services
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IRoleService, RoleService>();
@@ -173,6 +185,7 @@ namespace OpenFindBearings.Identity.Extensions
             services.AddScoped<IAuditLogService, AuditLogService>();
             services.AddScoped<ISystemConfigService, SystemConfigService>();
             services.AddScoped<ISmsCodeService, SmsCodeService>();
+            services.AddScoped<ITenantService, TenantService>();
 
             // 注册 Repositories
             services.AddScoped<IAuditLogRepository, AuditLogRepository>();

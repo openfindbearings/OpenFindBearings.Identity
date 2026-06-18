@@ -38,5 +38,11 @@ namespace OpenFindBearings.Identity.Models.DTOs.Client
         /// 是否公开客户端
         /// </summary>
         public bool IsPublic { get; set; }
+
+        /// <summary>
+        /// 所属租户 ID
+        /// </summary>
+        [Required(ErrorMessage = "请选择租户")]
+        public Guid TenantId { get; set; }
     }
 }

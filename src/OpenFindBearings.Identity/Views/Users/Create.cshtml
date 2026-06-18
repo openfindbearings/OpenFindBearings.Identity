@@ -1,0 +1,70 @@
+@using OpenFindBearings.Identity.Models.DTOs.Role
+@using OpenFindBearings.Identity.Models.DTOs.Tenant
+@using OpenFindBearings.Identity.Models.Requests
+@model AdminCreateUserRequest
+@{
+    ViewData["Title"] = "新建用户";
+}
+
+<h2>新建用户</h2>
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label asp-for="UserName" class="form-label">用户名</label>
+        <input asp-for="UserName" class="form-control" />
+        <span asp-validation-for="UserName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Password" class="form-label"></label>
+        <input asp-for="Password" class="form-control" type="password" />
+        <span asp-validation-for="Password" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="TenantId" class="form-label">所属租户</label>
+        <select asp-for="TenantId" class="form-select" asp-items="@(new SelectList(ViewBag.Tenants, "Id", "Name"))">
+            <option value="">-- 请选择租户 --</option>
+        </select>
+        <span asp-validation-for="TenantId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="PhoneNumber" class="form-label"></label>
+        <input asp-for="PhoneNumber" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label">姓名</label>
+        <input asp-for="Name" class="form-control" />
+    </div>
+
+    @if (ViewBag.Roles is IReadOnlyList<RoleDto> roles && roles.Any())
+    {
+        <div class="mb-3">
+            <label class="form-label">角色</label>
+            @foreach (var role in roles)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="Roles" value="@role.Name" id="role-@role.Name" />
+                    <label class="form-check-label" for="role-@role.Name">@role.Name</label>
+                </div>
+            }
+        </div>
+    }
+
+    <button type="submit" class="btn btn-primary">创建</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
+</form>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+}

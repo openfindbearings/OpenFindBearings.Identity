@@ -14,7 +14,7 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 分页获取用户列表
         /// </summary>
-        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
+        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, Guid? tenantId = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
 
         /// <summary>
         /// 根据 ID 获取用户
@@ -27,14 +27,29 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<UserDto?> GetByUsernameAsync(string username, CancellationToken ct = default);
 
         /// <summary>
+        /// 根据用户名和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByUsernameAsync(string username, Guid tenantId, CancellationToken ct = default);
+
+        /// <summary>
         /// 根据邮箱获取用户
         /// </summary>
         Task<UserDto?> GetByEmailAsync(string email, CancellationToken ct = default);
 
         /// <summary>
+        /// 根据邮箱和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByEmailAsync(string email, Guid tenantId, CancellationToken ct = default);
+
+        /// <summary>
         /// 根据手机号获取用户
         /// </summary>
         Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, CancellationToken ct = default);
+
+        /// <summary>
+        /// 根据手机号和租户获取用户（限定租户范围）
+        /// </summary>
+        Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber, Guid tenantId, CancellationToken ct = default);
 
         /// <summary>
         /// 获取用户总数

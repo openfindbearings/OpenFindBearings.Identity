@@ -39,5 +39,11 @@ namespace OpenFindBearings.Identity.Models.Requests
         /// </summary>
         [Range(typeof(bool), "true", "true", ErrorMessage = "请同意用户协议")]
         public bool AgreeTerms { get; set; }
+
+        /// <summary>
+        /// 租户名称（realm），如 "openfindbearings"。手机 App 自行硬编码
+        /// </summary>
+        [Required(ErrorMessage = "租户标识不能为空")]
+        public string Realm { get; set; } = string.Empty;
     }
 }

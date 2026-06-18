@@ -11,21 +11,7 @@ namespace OpenFindBearings.Identity.Data
         public DbSet<AuditLog> AuditLogs { get; set; } = default!;
         public DbSet<SmsCode> SmsCodes { get; set; } = default!;
         public DbSet<SystemConfig> SystemConfigs { get; set; } = default!;
-
-        //// OpenIddict 表
-        //public DbSet<OpenIddictEntityFrameworkCoreApplication> Applications { get; set; } = default!;
-        //public DbSet<OpenIddictEntityFrameworkCoreAuthorization> Authorizations { get; set; } = default!;
-        //public DbSet<OpenIddictEntityFrameworkCoreScope> Scopes { get; set; } = default!;
-        //public DbSet<OpenIddictEntityFrameworkCoreToken> Tokens { get; set; } = default!;
-
-        //// Identity 表
-        //public DbSet<OidcUser> Users { get; set; } = default!;
-        //public DbSet<IdentityRole<Guid>> Roles { get; set; } = default!;
-        //public DbSet<IdentityUserRole<Guid>> UserRoles { get; set; } = default!;
-        //public DbSet<IdentityUserClaim<Guid>> UserClaims { get; set; } = default!;
-        //public DbSet<IdentityUserLogin<Guid>> UserLogins { get; set; } = default!;
-        //public DbSet<IdentityUserToken<Guid>> UserTokens { get; set; } = default!;
-        //public DbSet<IdentityRoleClaim<Guid>> RoleClaims { get; set; } = default!;
+        public DbSet<Tenant> Tenants { get; set; } = default!;
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -33,15 +19,14 @@ namespace OpenFindBearings.Identity.Data
         {
             base.OnModelCreating(builder);
 
-            // OpenIddict 表重命名
-            builder.Entity<OpenIddictEntityFrameworkCoreApplication>(e => e.ToTable("Clients"));
-            builder.Entity<OpenIddictEntityFrameworkCoreAuthorization>(e => e.ToTable("Authorizations"));
-            builder.Entity<OpenIddictEntityFrameworkCoreScope>(e => e.ToTable("Scopes"));
-            builder.Entity<OpenIddictEntityFrameworkCoreToken>(e => e.ToTable("Tokens"));
-
-            // Identity 表重命名
+            // Identity 表重命名 + 租户影子属性
             builder.Entity<OidcUser>(e => e.ToTable("Users"));
-            builder.Entity<IdentityRole<Guid>>(e => e.ToTable("Roles"));
+            builder.Entity<IdentityRole<Guid>>(e =>
+            {
+                e.ToTable("Roles");
+                e.Property<Guid?>("TenantId");
+                e.HasIndex("TenantId");
+            });
             builder.Entity<IdentityUserRole<Guid>>(e => e.ToTable("UserRoles"));
             builder.Entity<IdentityUserClaim<Guid>>(e => e.ToTable("UserClaims"));
             builder.Entity<IdentityUserLogin<Guid>>(e => e.ToTable("UserLogins"));
@@ -53,13 +38,40 @@ namespace OpenFindBearings.Identity.Data
             {
                 e.OwnsOne(x => x.Address, address =>
                 {
-                    address.Property(a => a.Formatted).HasMaxLength(500);
+                    address.Property(a => a.Formatted).HasMaxLength(500).IsRequired();
                     address.Property(a => a.StreetAddress).HasMaxLength(500);
                     address.Property(a => a.Locality).HasMaxLength(200);
                     address.Property(a => a.Region).HasMaxLength(200);
                     address.Property(a => a.PostalCode).HasMaxLength(20);
                     address.Property(a => a.Country).HasMaxLength(100);
                 });
+            });
+
+            // OpenIddict Guid 键基类实体（ReplaceDefaultEntities<Guid>() 使用）
+            // TenantId 作为影子属性用于租户隔离
+            builder.Entity<OpenIddictEntityFrameworkCoreApplication<Guid>>(e =>
+            {
+                e.ToTable("OidcApplications");
+                e.Property<Guid?>("TenantId");
+                e.HasIndex("TenantId");
+            });
+            builder.Entity<OpenIddictEntityFrameworkCoreAuthorization<Guid>>(e =>
+            {
+                e.ToTable("OidcAuthorizations");
+                e.Property<Guid?>("TenantId");
+                e.HasIndex("TenantId");
+            });
+            builder.Entity<OpenIddictEntityFrameworkCoreScope<Guid>>(e =>
+            {
+                e.ToTable("OidcScopes");
+                e.Property<Guid?>("TenantId");
+                e.HasIndex("TenantId");
+            });
+            builder.Entity<OpenIddictEntityFrameworkCoreToken<Guid>>(e =>
+            {
+                e.ToTable("OidcTokens");
+                e.Property<Guid?>("TenantId");
+                e.HasIndex("TenantId");
             });
 
             // 审计日志索引
@@ -91,6 +103,27 @@ namespace OpenFindBearings.Identity.Data
                 e.Property(x => x.Key).IsRequired().HasMaxLength(200);
                 e.Property(x => x.Value).HasColumnType("text");
                 e.Property(x => x.Description).HasMaxLength(500);
+            });
+
+            // 租户表
+            builder.Entity<Tenant>(e =>
+            {
+                e.ToTable("Tenants");
+                e.HasKey(x => x.Id);
+                e.HasIndex(x => x.Name).IsUnique().HasDatabaseName("IX_Tenants_Name");
+                e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+                e.Property(x => x.Description).HasMaxLength(500);
+            });
+
+            // 用户表 - 租户关联 + 用户名+租户复合唯一索引
+            builder.Entity<OidcUser>(e =>
+            {
+                e.HasIndex(u => u.NormalizedUserName).IsUnique(false);
+                e.HasIndex(u => new { u.NormalizedUserName, u.TenantId })
+                    .IsUnique()
+                    .HasDatabaseName("UserNameTenantIndex");
+                e.HasIndex(x => x.TenantId);
+                e.Property(x => x.TenantId);
             });
         }
     }

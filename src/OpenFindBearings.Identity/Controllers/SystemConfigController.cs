@@ -5,6 +5,7 @@ using OpenFindBearings.Identity.Models.DTOs.SystemConfig;
 using OpenFindBearings.Identity.Models.Requests;
 using OpenFindBearings.Identity.Models.Responses;
 using OpenFindBearings.Identity.Services.Interfaces;
+using OpenIddict.Validation.AspNetCore;
 
 namespace OpenFindBearings.Identity.Controllers
 {
@@ -13,7 +14,7 @@ namespace OpenFindBearings.Identity.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, Roles = "SuperAdmin,Admin")]
     public class SystemConfigController : ControllerBase
     {
         private readonly ISystemConfigService _configService;

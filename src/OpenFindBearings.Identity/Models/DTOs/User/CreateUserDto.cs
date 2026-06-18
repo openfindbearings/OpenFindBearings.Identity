@@ -38,5 +38,8 @@ namespace OpenFindBearings.Identity.Models.DTOs.User
 
         /// <summary>昵称</summary>
         public string? Nickname { get; set; }
+
+        /// <summary>租户标识（可选，不传则使用默认租户）</summary>
+        public Guid? TenantId { get; set; }
     }
 }

@@ -32,6 +32,7 @@ namespace OpenFindBearings.Identity.Models.DTOs.User
         public string? LastLoginDevice { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
+        public Guid? TenantId { get; set; }
         public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
     }
 }
