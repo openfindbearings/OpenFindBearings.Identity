@@ -42,8 +42,8 @@ namespace OpenFindBearings.Identity.Data
                 await SeedRolesAsync(roleManager, logger);
                 await SeedUsersAsync(userManager, logger);
                 await SeedUserRolesAsync(userManager, roleManager, logger);
-                await SeedClientsAsync(appManager, context, logger);
                 await SeedScopesAsync(scopeManager, context, logger);
+                await SeedClientsAsync(appManager, context, logger);
 
                 logger.LogInformation("数据库初始化成功");
             }
