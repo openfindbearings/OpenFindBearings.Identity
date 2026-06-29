@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Models.Entities;
@@ -25,6 +26,7 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly UserManager<OidcUser> _userManager;
         private readonly SignInManager<OidcUser> _signInManager;
         private readonly ITenantResolver _tenantResolver;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
@@ -34,6 +36,7 @@ namespace OpenFindBearings.Identity.Controllers
             UserManager<OidcUser> userManager,
             SignInManager<OidcUser> signInManager,
             ITenantResolver tenantResolver,
+            IConfiguration configuration,
             ILogger<AuthorizationController> logger)
         {
             _userService = userService;
@@ -42,6 +45,7 @@ namespace OpenFindBearings.Identity.Controllers
             _userManager = userManager;
             _signInManager = signInManager;
             _tenantResolver = tenantResolver;
+            _configuration = configuration;
             _logger = logger;
         }
 
@@ -763,18 +767,19 @@ namespace OpenFindBearings.Identity.Controllers
         /// OIDC 结束会话端点（RP-Initiated Logout）
         /// </summary>
         [HttpGet("~/connect/logout")]
-        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null)
+        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null, string? admin_redirect = null)
         {
             await _signInManager.SignOutAsync();
 
-            if (!string.IsNullOrEmpty(post_logout_redirect_uri))
+            // 自定义参数 admin_redirect：OpenIddict 不拦截，由我们自行校验白名单
+            if (!string.IsNullOrEmpty(admin_redirect))
             {
-                // 仅允许相对路径，防止开放重定向漏洞
-                if (Uri.TryCreate(post_logout_redirect_uri, UriKind.Relative, out var relative))
+                var allowedUris = _configuration.GetSection("LogoutRedirectUris").Get<string[]>() ?? [];
+                if (allowedUris.Any(allowed => admin_redirect.StartsWith(allowed, StringComparison.OrdinalIgnoreCase)))
                 {
-                    return Redirect(relative.ToString());
+                    _logger.LogInformation("结束会话，重定向至: {Uri}", admin_redirect);
+                    return Redirect(admin_redirect);
                 }
-                return Redirect("~/");
             }
 
             return Redirect("~/");

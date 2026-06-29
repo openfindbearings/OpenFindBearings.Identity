@@ -42,26 +42,18 @@ namespace OpenFindBearings.Identity.Extensions
                 }
             });
 
-            // --- A. 存活探针 (/live) ---
+            // --- A. 存活探针 (/health/live) ---
             // 职责：只检查进程是否死锁。
             // 策略：不执行任何注册的检查项 (Predicate = false)。
-            app.MapHealthChecks("/live", new HealthCheckOptions
+            app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
                 Predicate = _ => false
             });
 
-            // --- B. 就绪探针 (/ready) ---
+            // --- B. 就绪探针 (/health/ready) ---
             // 职责：检查是否准备好接收流量。
-            // 【修复点】：排除 "startup" 标签的检查。
-            // 原因：在数据库迁移期间，数据库连接可能被占用。如果这里检查数据库，会导致就绪探针失败，
-            // 进而导致 K8s 认为服务未就绪甚至重启服务，导致迁移永远无法完成。
-            //app.MapHealthChecks("/ready", new HealthCheckOptions
-            //{
-            //    Predicate = check => !check.Tags.Contains("startup")
-            //});
-            // 就绪探针 (/ready) - 检查是否准备好接收流量
             // 排除 "startup" 标签的检查（数据库等启动时需要的检查）
-            app.MapHealthChecks("/ready", new HealthCheckOptions
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions
             {
                 Predicate = check => !check.Tags.Contains("startup"),
                 ResponseWriter = async (context, report) =>
