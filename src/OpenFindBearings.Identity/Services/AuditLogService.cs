@@ -40,19 +40,19 @@ namespace OpenFindBearings.Identity.Services
             if (!string.IsNullOrEmpty(action))
             {
                 logs = await _auditLogRepo.GetByActionAsync(action, skip, size, ct);
-                total = logs.Count;
+                total = await _auditLogRepo.GetCountByActionAsync(action, ct);
             }
             else if (!string.IsNullOrEmpty(resourceType))
             {
                 logs = await _auditLogRepo.GetByResourceTypeAsync(resourceType, skip, size, ct);
-                total = logs.Count;
+                total = await _auditLogRepo.GetCountByResourceTypeAsync(resourceType, ct);
             }
             else if (start.HasValue || end.HasValue)
             {
                 var startDate = start ?? DateTimeOffset.MinValue;
                 var endDate = end ?? DateTimeOffset.MaxValue;
                 logs = await _auditLogRepo.GetByDateRangeAsync(startDate, endDate, skip, size, ct);
-                total = logs.Count;
+                total = await _auditLogRepo.GetCountByDateRangeAsync(startDate, endDate, ct);
             }
             else
             {

@@ -71,6 +71,30 @@ namespace OpenFindBearings.Identity.Data.Repositories
         }
 
         /// <summary>
+        /// 按操作类型统计日志数量
+        /// </summary>
+        public async Task<int> GetCountByActionAsync(string action, CancellationToken cancellationToken = default)
+        {
+            return await _context.AuditLogs.CountAsync(l => l.Action == action, cancellationToken);
+        }
+
+        /// <summary>
+        /// 按资源类型统计日志数量
+        /// </summary>
+        public async Task<int> GetCountByResourceTypeAsync(string resourceType, CancellationToken cancellationToken = default)
+        {
+            return await _context.AuditLogs.CountAsync(l => l.ResourceType == resourceType, cancellationToken);
+        }
+
+        /// <summary>
+        /// 按时间范围统计日志数量
+        /// </summary>
+        public async Task<int> GetCountByDateRangeAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default)
+        {
+            return await _context.AuditLogs.CountAsync(l => l.CreatedAt >= start && l.CreatedAt <= end, cancellationToken);
+        }
+
+        /// <summary>
         /// 根据用户 ID 获取日志（分页）
         /// </summary>
         public async Task<IReadOnlyList<AuditLog>> GetByUserIdAsync(Guid userId, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
