@@ -101,7 +101,7 @@ namespace OpenFindBearings.Identity.Extensions
 
                     options.AllowClientCredentialsFlow() // Enable the client credentials flow.
                            .AllowPasswordFlow()
-                           //.AllowCustomFlow("sms")
+                            .AllowCustomFlow("sms")
                            //.AllowCustomFlow("wechat")
                            //.AllowCustomFlow("alipay")
                            .AllowAuthorizationCodeFlow()  // 授权码流程（Admin 登录用）
@@ -310,6 +310,9 @@ namespace OpenFindBearings.Identity.Extensions
     {
         private readonly IOpenIddictApplicationManager _applicationManager;
         private readonly ILogger<OpenIddictHealthCheck> _logger;
+        private static HealthCheckResult _cachedResult = HealthCheckResult.Healthy();
+        private static DateTime _lastCheck = DateTime.MinValue;
+        private static readonly TimeSpan _cacheDuration = TimeSpan.FromSeconds(30);
 
         public OpenIddictHealthCheck(
             IOpenIddictApplicationManager applicationManager,
@@ -323,16 +326,24 @@ namespace OpenFindBearings.Identity.Extensions
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            var now = DateTime.UtcNow;
+            if (now - _lastCheck < _cacheDuration)
+                return _cachedResult;
+
             try
             {
                 // 尝试获取一个已知的客户端来验证 OpenIddict 是否正常
-                var client = await _applicationManager.FindByClientIdAsync("sync-client");
-                return HealthCheckResult.Healthy();
+                await _applicationManager.FindByClientIdAsync("sync-client");
+                _cachedResult = HealthCheckResult.Healthy();
+                _lastCheck = now;
+                return _cachedResult;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "OpenIddict health check failed");
-                return HealthCheckResult.Unhealthy("OpenIddict check failed", ex);
+                _cachedResult = HealthCheckResult.Unhealthy("OpenIddict check failed", ex);
+                _lastCheck = now;
+                return _cachedResult;
             }
         }
     }

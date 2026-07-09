@@ -126,6 +126,17 @@ namespace OpenFindBearings.Identity.Controllers
 
             _logger.LogInformation("用户注册成功: UserId={UserId}, Account={Account}", result.Data.Id, request.Account);
 
+            // 员工邀请码暂存为用户声明，后续 JIT 创建业务用户时读取
+            if (!string.IsNullOrEmpty(request.InviteCode))
+            {
+                var claimResult = await _userService.AddClaimAsync(result.Data.Id, "invite_code", request.InviteCode);
+                if (claimResult.IsSuccess)
+                {
+                    _logger.LogInformation("邀请码已存入用户声明: UserId={UserId}, InviteCode={InviteCode}",
+                        result.Data.Id, request.InviteCode);
+                }
+            }
+
             return ApiResponseHelper.Created(
                 this,
                 nameof(AdminGetUserById),

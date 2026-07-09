@@ -429,17 +429,6 @@ namespace OpenFindBearings.Identity.Data
         private static async Task SeedClientsAsync(IOpenIddictApplicationManager appManager, ApplicationDbContext context, ILogger logger)
         {
             var ofbTenantId = TenantConstants.OpenFindBearingsTenantId;
-            var clientIds = new[] { "sync-client", "maui-client", "web-client", "admin_client" };
-
-            foreach (var clientId in clientIds)
-            {
-                if (await appManager.FindByClientIdAsync(clientId) != null)
-                {
-                    logger.LogInformation("客户端 [{ClientId}] 已存在，跳过", clientId);
-                    continue;
-                }
-                logger.LogInformation("开始创建客户端 [{ClientId}]...", clientId);
-            }
 
             async Task SetTenantIdAsync(string clientId, Guid tenantId)
             {
@@ -452,7 +441,19 @@ namespace OpenFindBearings.Identity.Data
                 }
             }
 
-            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            async Task CreateIfNotExistsAsync(OpenIddictApplicationDescriptor descriptor, string clientId, Guid tenantId)
+            {
+                if (await appManager.FindByClientIdAsync(clientId) != null)
+                {
+                    logger.LogInformation("客户端 [{ClientId}] 已存在，跳过", clientId);
+                    return;
+                }
+                await appManager.CreateAsync(descriptor);
+                await SetTenantIdAsync(clientId, tenantId);
+                logger.LogInformation("创建客户端 [{ClientId}] 成功", clientId);
+            }
+
+            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
                 ClientId = "sync-client",
                 ClientSecret = "388D45FA-B36B-4988-BA59-B187D329C207",
@@ -467,11 +468,9 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Scopes.Roles,
                     Permissions.Prefixes.Scope + "api:sync"
                 }
-            });
-            await SetTenantIdAsync("sync-client", ofbTenantId);
-            logger.LogInformation("创建客户端 [sync-client] 成功");
+            }, "sync-client", ofbTenantId);
 
-            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
                 ClientId = "maui-client",
                 ClientType = ClientTypes.Public,
@@ -481,16 +480,15 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Endpoints.Token,
                     Permissions.GrantTypes.Password,
                     Permissions.GrantTypes.RefreshToken,
+                    Permissions.Prefixes.GrantType + "sms",
                     Permissions.Scopes.Profile,
                     Permissions.Scopes.Email,
                     Permissions.Scopes.Roles,
                     Permissions.Prefixes.Scope + "api:maui"
                 }
-            });
-            await SetTenantIdAsync("maui-client", ofbTenantId);
-            logger.LogInformation("创建客户端 [maui-client] 成功");
+            }, "maui-client", ofbTenantId);
 
-            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
                 ClientId = "web-client",
                 ClientSecret = "web-secret-123",
@@ -513,11 +511,9 @@ namespace OpenFindBearings.Identity.Data
                 {
                     Requirements.Features.ProofKeyForCodeExchange
                 }
-            });
-            await SetTenantIdAsync("web-client", ofbTenantId);
-            logger.LogInformation("创建客户端 [web-client] 成功");
+            }, "web-client", ofbTenantId);
 
-            await appManager.CreateAsync(new OpenIddictApplicationDescriptor
+            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
                 ClientId = "admin_client",
                 ClientSecret = "admin-secret-key",
@@ -539,9 +535,7 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Prefixes.Scope + "openid",
                     Permissions.Prefixes.Scope + "api:admin"
                 }
-            });
-            await SetTenantIdAsync("admin_client", ofbTenantId);
-            logger.LogInformation("创建客户端 [admin_client] 成功");
+            }, "admin_client", ofbTenantId);
         }
 
         private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ApplicationDbContext context, ILogger logger)
@@ -575,6 +569,8 @@ namespace OpenFindBearings.Identity.Data
 
             await CreateScopeWithTenantAsync("api:sync");
             await CreateScopeWithTenantAsync("api:admin");
+            await CreateScopeWithTenantAsync("api:maui");
+            await CreateScopeWithTenantAsync("api:web");
         }
 
         #endregion
