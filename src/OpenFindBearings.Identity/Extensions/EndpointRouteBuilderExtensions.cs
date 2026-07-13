@@ -26,7 +26,7 @@ namespace OpenFindBearings.Identity.Extensions
                     };
                     await context.Response.WriteAsJsonAsync(result);
                 }
-            });
+            }).AllowAnonymous();
 
             // K8s 风格（简洁响应）
             app.MapHealthChecks("/healthz", new HealthCheckOptions
@@ -40,7 +40,7 @@ namespace OpenFindBearings.Identity.Extensions
 
                     await context.Response.WriteAsync(report.Status.ToString());
                 }
-            });
+            }).AllowAnonymous();
 
             // --- A. 存活探针 (/health/live) ---
             // 职责：只检查进程是否死锁。
@@ -48,7 +48,7 @@ namespace OpenFindBearings.Identity.Extensions
             app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
                 Predicate = _ => false
-            });
+            }).AllowAnonymous();
 
             // --- B. 就绪探针 (/health/ready) ---
             // 职责：检查是否准备好接收流量。
@@ -81,7 +81,7 @@ namespace OpenFindBearings.Identity.Extensions
                         await context.Response.WriteAsync("Ready");
                     }
                 }
-            });
+            }).AllowAnonymous();
         }
     }
 }
