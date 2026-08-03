@@ -38,6 +38,21 @@ namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
         Task<int> GetCountAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 按操作类型统计日志数量
+        /// </summary>
+        Task<int> GetCountByActionAsync(string action, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 按资源类型统计日志数量
+        /// </summary>
+        Task<int> GetCountByResourceTypeAsync(string resourceType, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 按时间范围统计日志数量
+        /// </summary>
+        Task<int> GetCountByDateRangeAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 根据用户 ID 获取日志（分页）
         /// </summary>
         Task<IReadOnlyList<AuditLog>> GetByUserIdAsync(Guid userId, int skip = 0, int take = 100, CancellationToken cancellationToken = default);

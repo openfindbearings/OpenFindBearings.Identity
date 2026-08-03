@@ -43,7 +43,7 @@ spec:
         
         livenessProbe:
           httpGet:
-            path: /live
+            path: /health/live
             port: 8080
           initialDelaySeconds: 30  # 容器启动后延迟30秒开始探测
           periodSeconds: 10        # 每10秒探测一次
@@ -52,7 +52,7 @@ spec:
         
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /health/ready
             port: 8080
           initialDelaySeconds: 5   # 启动后5秒开始探测
           periodSeconds: 5         # 每5秒探测一次

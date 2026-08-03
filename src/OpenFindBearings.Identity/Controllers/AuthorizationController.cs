@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Models.Entities;
@@ -25,6 +26,8 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly UserManager<OidcUser> _userManager;
         private readonly SignInManager<OidcUser> _signInManager;
         private readonly ITenantResolver _tenantResolver;
+        private readonly ISmsCodeService _smsCodeService;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
@@ -34,6 +37,8 @@ namespace OpenFindBearings.Identity.Controllers
             UserManager<OidcUser> userManager,
             SignInManager<OidcUser> signInManager,
             ITenantResolver tenantResolver,
+            ISmsCodeService smsCodeService,
+            IConfiguration configuration,
             ILogger<AuthorizationController> logger)
         {
             _userService = userService;
@@ -42,6 +47,8 @@ namespace OpenFindBearings.Identity.Controllers
             _userManager = userManager;
             _signInManager = signInManager;
             _tenantResolver = tenantResolver;
+            _smsCodeService = smsCodeService;
+            _configuration = configuration;
             _logger = logger;
         }
 
@@ -663,12 +670,149 @@ namespace OpenFindBearings.Identity.Controllers
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        #region 待实现授权类型
-
         private async Task<IActionResult> HandleSmsCodeAsync(OpenIddictRequest request)
         {
-            _logger.LogWarning("短信验证码授权尚未实现");
-            throw new NotImplementedException("SMS code grant type is not implemented yet.");
+            if (request.GrantType != GrantTypeConstants.Sms)
+            {
+                _logger.LogWarning("不支持的授权类型: {GrantType}", request.GrantType);
+                throw new NotImplementedException("The specified grant type is not implemented.");
+            }
+
+            // 验证客户端属于当前租户
+            var smsClientCheck = await ValidateClientTenantAsync(request);
+            if (smsClientCheck != null) return smsClientCheck;
+
+            var smsScopeCheck = await ValidateScopesTenantAsync(request);
+            if (smsScopeCheck != null) return smsScopeCheck;
+
+            // 获取手机号和验证码
+            var phone = request.GetParameter("phone")?.ToString();
+            var code = request.GetParameter("code")?.ToString();
+
+            if (string.IsNullOrEmpty(phone) || string.IsNullOrEmpty(code))
+            {
+                _logger.LogWarning("SMS模式: 缺少手机号或验证码");
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Invalid phone or code."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 验证验证码
+            var isValid = await _smsCodeService.ValidateAsync(phone, code, SmsCodeTypeConstants.Login);
+            if (!isValid)
+            {
+                _logger.LogWarning("SMS模式: 验证码无效 Phone={Phone}", phone);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Invalid verification code."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 解析租户
+            var tenantInfo = await _tenantResolver.ResolveAsync();
+            if (tenantInfo.TenantId == null)
+            {
+                _logger.LogWarning("SMS模式: 缺少租户信息");
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Missing tenant information."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            // 查找或创建用户
+            var userDto = await _userService.GetByPhoneNumberAsync(phone, tenantInfo.TenantId.Value);
+            OidcUser user;
+
+            if (userDto == null)
+            {
+                user = OidcUser.Create(
+                    userName: phone,
+                    email: null,
+                    tenantId: tenantInfo.TenantId,
+                    phoneNumber: phone,
+                    name: phone
+                );
+
+                var createResult = await _userManager.CreateAsync(user);
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                    _logger.LogError("SMS模式: 自动创建用户失败 Phone={Phone}, Errors={Errors}", phone, errors);
+                    return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.ServerError,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Failed to create user."
+                    }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                }
+
+                _logger.LogInformation("SMS模式: 自动创建用户成功 Phone={Phone}, UserId={UserId}", phone, user.Id);
+            }
+            else
+            {
+                user = (await _userManager.FindByIdAsync(userDto.Id.ToString()))!;
+                if (user == null)
+                {
+                    _logger.LogWarning("SMS模式: 无法加载用户 Phone={Phone}", phone);
+                    return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "User not found."
+                    }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                }
+            }
+
+            // 检查用户是否可以登录
+            var canLogin = await _userService.CheckCanLoginAsync(user.Id);
+            if (!canLogin)
+            {
+                _logger.LogWarning("SMS模式: 用户无法登录 Phone={Phone}", phone);
+                await _userService.RecordLoginFailureAsync(user.Id);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The account is not available."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+
+            await _userService.RecordLoginSuccessAsync(user.Id, HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            // 创建身份标识
+            var identity = new ClaimsIdentity(
+                authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                nameType: Claims.Name,
+                roleType: Claims.Role);
+
+            // 添加用户声明
+            identity.SetClaim(Claims.Subject, user.Sub);
+            if (!string.IsNullOrEmpty(user.PhoneNumber))
+                identity.SetClaim("phone_number", user.PhoneNumber);
+            identity.SetClaim(Claims.Name, user.Name ?? user.UserName);
+            identity.SetClaim(Claims.PreferredUsername, user.UserName);
+
+            // 添加租户声明
+            identity.SetClaim("tenant_id", user.TenantId?.ToString() ?? "");
+
+            // 获取角色声明
+            var roles = await _userService.GetRolesAsync(user.Id);
+            foreach (var role in roles)
+            {
+                identity.SetClaim(Claims.Role, role);
+            }
+
+            // 设置作用域
+            var scopes = request.GetScopes().ToList();
+            identity.SetScopes(scopes);
+            identity.SetResources(await GetScopeResourcesAsync(scopes));
+            identity.SetDestinations(GetDestinations);
+
+            _logger.LogInformation("SMS模式: 用户 {Phone} 登录成功, Scopes={Scopes}",
+                phone, scopes.Count == 0 ? "none" : string.Join(",", scopes));
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         private async Task<IActionResult> HandleWeChatAsync(OpenIddictRequest request)
@@ -688,8 +832,6 @@ namespace OpenFindBearings.Identity.Controllers
             _logger.LogWarning("生物识别授权尚未实现");
             throw new NotImplementedException("Biometric grant type is not implemented yet.");
         }
-
-        #endregion
 
         #endregion
 
@@ -763,18 +905,19 @@ namespace OpenFindBearings.Identity.Controllers
         /// OIDC 结束会话端点（RP-Initiated Logout）
         /// </summary>
         [HttpGet("~/connect/logout")]
-        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null)
+        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null, string? admin_redirect = null)
         {
             await _signInManager.SignOutAsync();
 
-            if (!string.IsNullOrEmpty(post_logout_redirect_uri))
+            // 自定义参数 admin_redirect：OpenIddict 不拦截，由我们自行校验白名单
+            if (!string.IsNullOrEmpty(admin_redirect))
             {
-                // 仅允许相对路径，防止开放重定向漏洞
-                if (Uri.TryCreate(post_logout_redirect_uri, UriKind.Relative, out var relative))
+                var allowedUris = _configuration.GetSection("LogoutRedirectUris").Get<string[]>() ?? [];
+                if (allowedUris.Any(allowed => admin_redirect.StartsWith(allowed, StringComparison.OrdinalIgnoreCase)))
                 {
-                    return Redirect(relative.ToString());
+                    _logger.LogInformation("结束会话，重定向至: {Uri}", admin_redirect);
+                    return Redirect(admin_redirect);
                 }
-                return Redirect("~/");
             }
 
             return Redirect("~/");

@@ -49,34 +49,34 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
-// 9. 路由
+// 10. 路由
 app.UseRouting();
 
-// 10. CORS
+// 11. CORS
 app.UseCors("AllowSpecificOrigins");
 
-// 11. 租户上下文（必须在认证前执行）
-app.UseTenantContext();
-
-// 12. 认证
-app.UseAuthentication();
-
-// 13. 授权
-app.UseAuthorization();
-
-// 14. 静态文件
+// 12. 静态文件（在认证前，避免 CSS/JS 走认证检查）
 app.MapStaticAssets();
 
-// 15. 端点映射
+// 13. 租户上下文（必须在认证前执行）
+app.UseTenantContext();
+
+// 14. 认证
+app.UseAuthentication();
+
+// 15. 授权
+app.UseAuthorization();
+
+// 16. 端点映射
 app.MapControllers();
 app.MapDefaultControllerRoute().WithStaticAssets();
 
-// 16. 健康检查
+// 17. 健康检查
 app.MapAllHealthChecks();
 
-// 17. 执行数据库初始化
+// 18. 执行数据库初始化
 using var scope = app.Services.CreateScope();
 await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
 
-// 18. 启动
+// 19. 启动
 app.Run();
