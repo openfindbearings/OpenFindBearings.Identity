@@ -14,7 +14,7 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// <summary>
         /// 分页获取用户列表
         /// </summary>
-        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, Guid? tenantId = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, CancellationToken ct = default);
+        Task<PaginatedResult<UserDto>> GetPagedAsync(int page, int size, string? search = null, UserStatusFilter? status = null, string? role = null, Guid? tenantId = null, DateTimeOffset? dateFrom = null, DateTimeOffset? dateTo = null, DateTimeOffset? lastLoginFrom = null, DateTimeOffset? lastLoginTo = null, bool includeDeleted = false, CancellationToken ct = default);
 
         /// <summary>
         /// 根据 ID 获取用户
@@ -77,6 +77,11 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// 恢复软删除的用户
         /// </summary>
         Task<ServiceResult> RestoreAsync(Guid id, CancellationToken ct = default);
+
+        /// <summary>
+        /// 彻底删除用户（物理删除，不可恢复，仅限已软删除用户）
+        /// </summary>
+        Task<ServiceResult> HardDeleteAsync(Guid id, CancellationToken ct = default);
 
         /// <summary>
         /// 启用用户

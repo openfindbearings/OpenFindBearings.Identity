@@ -300,7 +300,8 @@ namespace OpenFindBearings.Identity.Controllers
                 request.DateFrom,
                 request.DateTo,
                 request.LastLoginFrom,
-                request.LastLoginTo);
+                request.LastLoginTo,
+                request.IncludeDeleted);
 
             var response = new PaginatedResult<UserResponse>(
                 result.Items.Select(u=>u.ToResponse()).ToList(),
@@ -482,6 +483,39 @@ namespace OpenFindBearings.Identity.Controllers
 
             _logger.LogInformation("管理员删除用户: UserId={UserId}, Operator={Operator}", id, GetCurrentUserName());
             return ApiResponseHelper.Success<object>(this, null!, "User deleted successfully");
+        }
+
+        /// <summary>
+        /// 彻底删除用户（管理员 - 物理删除，不可恢复，仅限已软删除用户）
+        /// </summary>
+        [HttpDelete("admin/users/{id}/permanent")]
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        public async Task<ActionResult<ApiResponse<object>>> AdminHardDeleteUser(Guid id)
+        {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<object>(this, "User not found");
+            }
+
+            // 禁止彻底删除当前登录管理员本人
+            if (GetCurrentUserId() == id)
+            {
+                return ApiResponseHelper.BadRequest<object>(this, "Cannot permanently delete the current administrator");
+            }
+
+            var result = await _userService.HardDeleteAsync(id);
+
+            if (!result.IsSuccess)
+            {
+                return ApiResponseHelper.BadRequest<object>(
+                    this,
+                    "Permanent delete failed",
+                    result.GetErrorDictionary());
+            }
+
+            _logger.LogInformation("管理员彻底删除用户: UserId={UserId}, Operator={Operator}", id, GetCurrentUserName());
+            return ApiResponseHelper.Success<object>(this, null!, "User permanently deleted");
         }
 
         /// <summary>
