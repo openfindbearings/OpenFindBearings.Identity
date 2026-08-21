@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
@@ -43,30 +44,36 @@ namespace OpenFindBearings.Identity.Middleware
                     requestBody = requestBody[..2000] + "...(截断)";
             }
 
+            var sw = Stopwatch.StartNew();
             try
             {
                 await _next(context);
             }
             finally
             {
+                sw.Stop();
                 try
                 {
                     var success = context.Response.StatusCode < 400;
+                    var statusCode = context.Response.StatusCode;
 
                     var log = AuditLog.CreateFull(
                         userId: Guid.TryParse(context.User.FindFirst("sub")?.Value, out var uid) ? uid : null,
                         username: context.User.FindFirst("name")?.Value
                                    ?? context.User.FindFirst("preferred_username")?.Value,
-                        action: MapAction(method, path, context.Response.StatusCode),
+                        action: MapAction(method, path, statusCode),
                         resourceType: ExtractEntityType(path),
                         resourceId: ExtractEntityId(path),
-                        details: $"{method} {path} -> {context.Response.StatusCode}" +
-                                 (requestBody != null ? $" Body: {requestBody}" : ""),
+                        details: requestBody,
                         success: success,
-                        failureReason: success ? null : $"HTTP {context.Response.StatusCode}",
+                        failureReason: success ? null : $"HTTP {statusCode}",
                         clientId: context.User.FindFirst("client_id")?.Value,
                         ipAddress: context.Connection.RemoteIpAddress?.ToString(),
-                        userAgent: context.Request.Headers.UserAgent.ToString());
+                        userAgent: context.Request.Headers.UserAgent.ToString(),
+                        httpMethod: method,
+                        requestPath: path,
+                        statusCode: statusCode,
+                        durationMs: sw.ElapsedMilliseconds);
 
                     await repository.AddAsync(log, context.RequestAborted);
                     await dbContext.SaveChangesAsync(context.RequestAborted);
