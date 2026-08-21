@@ -79,7 +79,14 @@ app.MapAllHealthChecks();
 
 // 18. 执行数据库初始化
 using var scope = app.Services.CreateScope();
-await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
+try
+{
+    await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "数据库初始化失败，服务继续运行，数据库相关功能暂时不可用");
+}
 
 // 19. 启动
 app.Run();
