@@ -67,6 +67,9 @@ app.UseAuthentication();
 // 15. 授权
 app.UseAuthorization();
 
+// 15.1 审计日志（认证之后，读取操作人身份）
+app.UseMiddleware<AuditLogMiddleware>();
+
 // 16. 端点映射
 app.MapControllers();
 app.MapDefaultControllerRoute().WithStaticAssets();
