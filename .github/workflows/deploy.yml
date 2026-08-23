@@ -5,11 +5,9 @@ permissions:
   packages: write
 
 on:
-  # 1. 发布 GitHub Release 时触发
   release:
     types: [published]
 
-  # 2. 手动触发（可自定义 tag）
   workflow_dispatch:
     inputs:
       tag:
@@ -19,18 +17,21 @@ on:
       reason:
         description: 'Reason for manual publish'
         required: false
+      skip_deploy:
+        description: 'Skip K3s deploy (build and push only)'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
     outputs:
       docker_tag: ${{ steps.set_tag.outputs.docker_tag }}
-      # 1. 新增输出：动态生成的镜像名
       image_name: ${{ steps.set_image_name.outputs.image_name }}
-      
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
 
@@ -50,118 +51,45 @@ jobs:
           esac
           echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Determine Image Name (Lowercase & Replace . with -)
+      - name: Determine Image Name
         id: set_image_name
         run: |
-         # 1. 获取仓库名
-         REPO_NAME="${{ github.event.repository.name }}"
-         # 2. 先替换点号 . 为连接符 -
-         TEMP_NAME=$(echo "$REPO_NAME" | tr '.' '-')
-         # 3. 再将整个字符串转换为小写
-         IMAGE_NAME=$(echo "$TEMP_NAME" | tr '[:upper:]' '[:lower:]')
-         echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
-         echo "Using image name: $IMAGE_NAME"
+          REPO_NAME="${{ github.event.repository.name }}"
+          TEMP_NAME=$(echo "$REPO_NAME" | tr '.' '-')
+          IMAGE_NAME=$(echo "$TEMP_NAME" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "Image: $IMAGE_NAME"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.7.0
+        uses: docker/setup-qemu-action@v4.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.12.0
+        uses: docker/setup-buildx-action@v4.0.0
 
-      - name: Build and export image as tar
-        uses: docker/build-push-action@v6.18.0
-        with:
-          context: .
-          file: ./src/OpenFindBearings.Identity/Dockerfile
-          tags: temp-image:${{ steps.set_tag.outputs.docker_tag }}
-          outputs: type=docker,dest=/tmp/image.tar
-
-      - name: Upload image artifact
-        uses: actions/upload-artifact@v6.0.0
-        with:
-          name: docker-image
-          path: /tmp/image.tar
-
-  # --- Push to Docker Hub ---
-  push-dockerhub:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v7.0.0
-        with:
-          name: docker-image
-          path: /tmp
-      - run: docker load < /tmp/image.tar
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4.0.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Push to Docker Hub
-        run: |
-          TAG=${{ needs.build.outputs.docker_tag }}
-          # 2. 使用动态名称
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ needs.build.outputs.image_name }}:$TAG
-          docker tag temp-image:$TAG $IMAGE
-          docker push $IMAGE
-
-  # --- Push to Quay.io ---
-  push-quay:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v7.0.0
-        with:
-          name: docker-image
-          path: /tmp
-      - run: docker load < /tmp/image.tar
-      - name: Login to Quay.io
-        uses: docker/login-action@v4.0.0
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_ROBOT_USERNAME }}
-          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
-      - name: Push to Quay.io
-        run: |
-          TAG=${{ needs.build.outputs.docker_tag }}
-          # 2. 使用动态名称
-          ORG=$(echo "${{ secrets.QUAY_ROBOT_USERNAME }}" | cut -d'+' -f1)
-          IMAGE=quay.io/$ORG/${{ needs.build.outputs.image_name }}:$TAG
-          docker tag temp-image:$TAG $IMAGE
-          docker push $IMAGE
-
-  # --- Push to GitHub GHCR ---
-  push-ghcr:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v7.0.0
-        with:
-          name: docker-image
-          path: /tmp
-      - run: docker load < /tmp/image.tar
       - name: Login to GHCR
         uses: docker/login-action@v4.0.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push to GHCR
-        run: |
-          TAG=${{ needs.build.outputs.docker_tag }}
-          # 2. 使用动态名称
-          IMAGE=ghcr.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:$TAG
-          docker tag temp-image:$TAG $IMAGE
-          docker push $IMAGE
 
-  # --- Deploy to K3s via Remote API ---
+      - name: Build and push to GHCR
+        uses: docker/build-push-action@v7.0.0
+        with:
+          context: .
+          file: ./src/OpenFindBearings.Identity/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_tag.outputs.docker_tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ steps.set_image_name.outputs.image_name }}:latest
+
   deploy:
-    needs: [build, push-ghcr]
+    needs: build-and-push
     runs-on: ubuntu-latest
     if: |
-      github.event_name != 'workflow_dispatch' || 
-      (github.event_name == 'workflow_dispatch' && inputs.skip_deploy != 'true')
-    
+      github.event_name != 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.skip_deploy)
+
     steps:
       - name: Install kubectl
         run: |
@@ -169,7 +97,7 @@ jobs:
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
           kubectl version --client
-      
+
       - name: Configure kubeconfig
         env:
           KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_CONTENT }}
@@ -177,19 +105,18 @@ jobs:
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_CONTENT" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
-          # 验证连接
           kubectl cluster-info
           kubectl get nodes
-      
+
       - name: Deploy to K3s
         env:
           NAMESPACE: "openfindbearings"
           DEPLOYMENT: "openfindbearings-identity-deployment"
           CONTAINER: "openfindbearings-identity"
-          IMAGE: "quay.io/${{ github.repository_owner }}/${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.docker_tag }}"
+          IMAGE: "ghcr.io/${{ github.repository_owner }}/${{ needs.build-and-push.outputs.image_name }}:${{ needs.build-and-push.outputs.docker_tag }}"
         run: |
           set -e
-          
+
           echo "========================================="
           echo "开始部署到 K3s"
           echo "部署时间: $(date)"
@@ -199,72 +126,53 @@ jobs:
           echo "容器名称: $CONTAINER"
           echo "镜像地址: $IMAGE"
           echo "========================================="
-          
-          # 检查命名空间是否存在
+
           if ! kubectl get namespace $NAMESPACE &> /dev/null; then
             echo "错误: 命名空间 $NAMESPACE 不存在"
             exit 1
           fi
-          
-          # 检查 deployment 是否存在
+
           if ! kubectl get deployment $DEPLOYMENT -n $NAMESPACE &> /dev/null; then
             echo "错误: deployment $DEPLOYMENT 在命名空间 $NAMESPACE 中不存在"
-            echo "可用的 deployments:"
             kubectl get deployments -n $NAMESPACE
             exit 1
           fi
-          
-          # 保存当前镜像以便回滚
+
           CURRENT_IMAGE=$(kubectl get deployment $DEPLOYMENT \
             -n $NAMESPACE \
             -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}")
-          
+
           echo "当前镜像: $CURRENT_IMAGE"
           echo "新镜像: $IMAGE"
-          echo ""
-          
-          # 更新镜像
+
           echo "正在更新 deployment 镜像..."
           kubectl set image deployment/$DEPLOYMENT \
             $CONTAINER=$IMAGE \
             -n $NAMESPACE \
             --record
-          
-          # 等待部署完成
+
           echo "等待 rollout 完成（超时时间: 5分钟）..."
           if ! kubectl rollout status deployment/$DEPLOYMENT \
             -n $NAMESPACE \
             --timeout=5m; then
             echo ""
-            echo "❌ 部署失败，正在回滚..."
+            echo "部署失败，正在回滚..."
             kubectl rollout undo deployment/$DEPLOYMENT \
               -n $NAMESPACE
             echo "回滚完成"
-            echo "当前镜像已恢复为:"
             kubectl get deployment $DEPLOYMENT \
               -n $NAMESPACE \
               -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}"
             echo ""
             exit 1
           fi
-          
-          # 验证部署
+
           echo ""
           echo "========================================="
-          echo "✅ 部署成功！"
+          echo "部署成功"
           echo "========================================="
-          echo ""
-          echo "Deployment 状态:"
           kubectl get deployment $DEPLOYMENT -n $NAMESPACE
           echo ""
-          echo "Pods 状态:"
           kubectl get pods -n $NAMESPACE -l app=openfindbearings-identity
-          echo ""
-          echo "最近的 Pods:"
-          kubectl get pods -n $NAMESPACE --sort-by='.metadata.creationTimestamp' | tail -5
-          echo ""
-          echo "最近事件:"
-          kubectl get events -n $NAMESPACE --sort-by='.lastTimestamp' | tail -10
-          
           echo ""
           echo "部署完成时间: $(date)"
