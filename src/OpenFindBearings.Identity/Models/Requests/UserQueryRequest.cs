@@ -48,6 +48,11 @@ namespace OpenFindBearings.Identity.Models.Requests
         public DateTimeOffset? DateTo { get; set; }
 
         /// <summary>
+        /// 是否包含已删除用户
+        /// </summary>
+        public bool IncludeDeleted { get; set; }
+
+        /// <summary>
         /// 最后登录开始时间
         /// </summary>
         public DateTimeOffset? LastLoginFrom { get; set; }

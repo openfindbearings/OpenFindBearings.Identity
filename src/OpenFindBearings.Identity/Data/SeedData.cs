@@ -542,7 +542,7 @@ namespace OpenFindBearings.Identity.Data
         {
             var ofbTenantId = TenantConstants.OpenFindBearingsTenantId;
 
-            async Task CreateScopeWithTenantAsync(string name)
+            async Task CreateScopeWithTenantAsync(string name, string[] resources)
             {
                 if (await scopeManager.FindByNameAsync(name) != null)
                 {
@@ -550,11 +550,15 @@ namespace OpenFindBearings.Identity.Data
                     return;
                 }
 
-                await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+                var descriptor = new OpenIddictScopeDescriptor
                 {
-                    Name = name,
-                    Resources = { ApiResourceConstants.BaseApi }
-                });
+                    Name = name
+                };
+                foreach (var r in resources)
+                {
+                    descriptor.Resources.Add(r);
+                }
+                await scopeManager.CreateAsync(descriptor);
 
                 var scopes = context.Set<OpenIddictEntityFrameworkCoreScope<Guid>>();
                 var scope = await scopes.AsTracking().FirstOrDefaultAsync(s => s.Name == name);
@@ -567,10 +571,10 @@ namespace OpenFindBearings.Identity.Data
                 logger.LogInformation("创建 Scope [{Name}] 成功", name);
             }
 
-            await CreateScopeWithTenantAsync("api:sync");
-            await CreateScopeWithTenantAsync("api:admin");
-            await CreateScopeWithTenantAsync("api:maui");
-            await CreateScopeWithTenantAsync("api:web");
+            await CreateScopeWithTenantAsync("api:sync", new[] { ApiResourceConstants.BaseApi });
+            await CreateScopeWithTenantAsync("api:admin", new[] { ApiResourceConstants.BaseApi, ApiResourceConstants.SyncApi });
+            await CreateScopeWithTenantAsync("api:maui", new[] { ApiResourceConstants.BaseApi });
+            await CreateScopeWithTenantAsync("api:web", new[] { ApiResourceConstants.BaseApi });
         }
 
         #endregion

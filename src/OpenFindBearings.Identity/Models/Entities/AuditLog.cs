@@ -26,7 +26,11 @@
             string? failureReason,
             string? clientId,
             string? ipAddress,
-            string? userAgent)
+            string? userAgent,
+            string? httpMethod = null,
+            string? requestPath = null,
+            int? statusCode = null,
+            long? durationMs = null)
         {
             Id = Guid.NewGuid();
             UserId = userId;
@@ -40,6 +44,10 @@
             ClientId = clientId;
             IpAddress = ipAddress;
             UserAgent = userAgent;
+            HttpMethod = httpMethod;
+            RequestPath = requestPath;
+            StatusCode = statusCode;
+            DurationMs = durationMs;
             CreatedAt = DateTimeOffset.UtcNow;
         }
 
@@ -104,6 +112,26 @@
         /// 用户代理 (User Agent)
         /// </summary>
         public string? UserAgent { get; private set; }
+
+        /// <summary>
+        /// HTTP 请求方法
+        /// </summary>
+        public string? HttpMethod { get; private set; }
+
+        /// <summary>
+        /// 请求路径
+        /// </summary>
+        public string? RequestPath { get; private set; }
+
+        /// <summary>
+        /// HTTP 响应状态码
+        /// </summary>
+        public int? StatusCode { get; private set; }
+
+        /// <summary>
+        /// 请求处理耗时（毫秒）
+        /// </summary>
+        public long? DurationMs { get; private set; }
 
         /// <summary>
         /// 创建时间
@@ -350,7 +378,11 @@
             string? failureReason,
             string? clientId,
             string? ipAddress,
-            string? userAgent)
+            string? userAgent,
+            string? httpMethod = null,
+            string? requestPath = null,
+            int? statusCode = null,
+            long? durationMs = null)
         {
             return new AuditLog(
                 userId: userId,
@@ -363,7 +395,11 @@
                 failureReason: failureReason,
                 clientId: clientId,
                 ipAddress: ipAddress,
-                userAgent: userAgent);
+                userAgent: userAgent,
+                httpMethod: httpMethod,
+                requestPath: requestPath,
+                statusCode: statusCode,
+                durationMs: durationMs);
         }
 
         // ========== 业务方法 ==========

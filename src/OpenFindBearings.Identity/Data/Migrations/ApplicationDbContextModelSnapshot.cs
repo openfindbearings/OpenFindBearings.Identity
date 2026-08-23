@@ -17,7 +17,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -177,12 +177,23 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.Property<string>("Details")
                         .HasColumnType("text");
 
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("FailureReason")
                         .HasColumnType("text");
+
+                    b.Property<string>("HttpMethod")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("IpAddress")
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)");
+
+                    b.Property<string>("RequestPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("ResourceId")
                         .HasColumnType("text");
@@ -194,6 +205,9 @@ namespace OpenFindBearings.Identity.Data.Migrations
                     b.Property<string>("Status")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer");
 
                     b.Property<string>("UserAgent")
                         .HasColumnType("text");

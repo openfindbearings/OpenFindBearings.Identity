@@ -46,9 +46,14 @@ namespace OpenFindBearings.Identity.Services
      DateTimeOffset? dateTo = null,
      DateTimeOffset? lastLoginFrom = null,
      DateTimeOffset? lastLoginTo = null,
+     bool includeDeleted = false,
      CancellationToken ct = default)
         {
-            var query = _userManager.Users.Where(u => u.IsActive);
+            var query = _userManager.Users.AsQueryable();
+            if (!includeDeleted)
+            {
+                query = query.Where(u => u.IsActive);
+            }
 
             // 租户过滤
             if (tenantId.HasValue)
@@ -327,6 +332,36 @@ namespace OpenFindBearings.Identity.Services
             }
 
             await _auditLogRepo.LogUserActionAsync(user.Id, user.UserName, "RestoreUser", user.Id.ToString(), null, true, null, ct);
+            return ServiceResult.Success();
+        }
+
+        /// <inheritdoc/>
+        public async Task<ServiceResult> HardDeleteAsync(Guid id, CancellationToken ct = default)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+            {
+                return ServiceResult.Failure(new ServiceError { Code = "UserNotFound", Description = "用户不存在" });
+            }
+
+            if (user.IsActive)
+            {
+                return ServiceResult.Failure(new ServiceError { Code = "UserNotSoftDeleted", Description = "仅已软删除的用户可彻底删除" });
+            }
+
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors.Select(e => new ServiceError
+                {
+                    Code = e.Code,
+                    Description = e.Description
+                }).ToArray();
+
+                return ServiceResult.Failure(errors);
+            }
+
+            await _auditLogRepo.LogUserActionAsync(id, user.UserName, "HardDeleteUser", id.ToString(), null, true, null, ct);
             return ServiceResult.Success();
         }
 

@@ -84,6 +84,10 @@ namespace OpenFindBearings.Identity.Data
                 e.Property(x => x.ResourceType).HasMaxLength(50);
                 e.Property(x => x.Status).HasMaxLength(20);
                 e.Property(x => x.IpAddress).HasMaxLength(45);
+                e.Property(x => x.HttpMethod).HasMaxLength(10);
+                e.Property(x => x.RequestPath).HasMaxLength(500);
+                e.Property(x => x.StatusCode);
+                e.Property(x => x.DurationMs);
             });
 
             // 短信验证码索引
