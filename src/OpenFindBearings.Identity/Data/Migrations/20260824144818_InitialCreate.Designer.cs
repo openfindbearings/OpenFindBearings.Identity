@@ -9,10 +9,10 @@ using OpenFindBearings.Identity.Data;
 
 #nullable disable
 
-namespace OpenFindBearings.Identity.Migrations
+namespace OpenFindBearings.Identity.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260821003820_InitialCreate")]
+    [Migration("20260824144818_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
