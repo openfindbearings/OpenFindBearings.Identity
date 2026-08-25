@@ -218,6 +218,11 @@ namespace OpenFindBearings.Identity.Controllers
 
             identity.AddClaim(new Claim("tenant_id", user.TenantId?.ToString() ?? ""));
 
+            // 从 authorize 请求获取 device_id 并写入授权码 principal
+            var deviceId = Request.Query["device_id"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(deviceId))
+                identity.AddClaim(new Claim("device_id", deviceId));
+
             var scopes = request.GetScopes().ToList();
             userPrincipal.SetScopes(scopes);
             userPrincipal.SetResources(await GetScopeResourcesAsync(scopes));
@@ -533,6 +538,11 @@ namespace OpenFindBearings.Identity.Controllers
             // 添加租户声明
             identity.SetClaim("tenant_id", user.TenantId?.ToString() ?? "");
 
+            // 添加设备标识（用于刷新令牌时校验设备绑定）
+            var deviceId = request.GetParameter("device_id")?.ToString();
+            if (!string.IsNullOrEmpty(deviceId))
+                identity.SetClaim("device_id", deviceId);
+
             // 添加角色声明
             foreach (var role in roles)
             {
@@ -607,6 +617,23 @@ namespace OpenFindBearings.Identity.Controllers
                 }
             }
 
+            // 设备绑定校验：如果原始 token 有 device_id，刷新请求也必须携带且一致
+            var originalDeviceId = originalClaims.FirstOrDefault(c => c.Type == "device_id")?.Value;
+            var requestDeviceId = request.GetParameter("device_id")?.ToString();
+            if (!string.IsNullOrEmpty(originalDeviceId))
+            {
+                if (string.IsNullOrEmpty(requestDeviceId) || originalDeviceId != requestDeviceId)
+                {
+                    _logger.LogWarning("刷新令牌: device_id 不匹配, Original={Original}, Request={Request}",
+                        originalDeviceId, requestDeviceId ?? "(空)");
+                    return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Token refresh failed: device mismatch."
+                    }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                }
+            }
+
             // 创建身份标识
             var identity = new ClaimsIdentity(
                 authenticationType: TokenValidationParameters.DefaultAuthenticationType,
@@ -640,6 +667,10 @@ namespace OpenFindBearings.Identity.Controllers
 
                 identity.SetClaim("tenant_id", user.TenantId.ToString());
 
+                // 传递设备标识到新 token
+                if (!string.IsNullOrEmpty(originalDeviceId))
+                    identity.SetClaim("device_id", originalDeviceId);
+
                 // 加载角色声明
                 var roles = await _userService.GetRolesAsync(user.Id);
                 foreach (var role in roles)
@@ -659,6 +690,10 @@ namespace OpenFindBearings.Identity.Controllers
                 {
                     identity.SetClaim("tenant_id", tenantId);
                 }
+
+                // 从原始授权中恢复 device_id（如果有）
+                if (!string.IsNullOrEmpty(originalDeviceId))
+                    identity.SetClaim("device_id", originalDeviceId);
             }
 
             // 设置作用域
@@ -798,6 +833,11 @@ namespace OpenFindBearings.Identity.Controllers
 
             // 添加租户声明
             identity.SetClaim("tenant_id", user.TenantId?.ToString() ?? "");
+
+            // 添加设备标识（用于刷新令牌时校验设备绑定）
+            var deviceId = request.GetParameter("device_id")?.ToString();
+            if (!string.IsNullOrEmpty(deviceId))
+                identity.SetClaim("device_id", deviceId);
 
             // 获取角色声明
             var roles = await _userService.GetRolesAsync(user.Id);
