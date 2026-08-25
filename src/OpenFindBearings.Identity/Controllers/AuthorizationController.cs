@@ -28,6 +28,7 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly ITenantResolver _tenantResolver;
         private readonly ISmsCodeService _smsCodeService;
         private readonly IConfiguration _configuration;
+        private readonly IOpenIddictApplicationManager _applicationManager;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
@@ -39,6 +40,7 @@ namespace OpenFindBearings.Identity.Controllers
             ITenantResolver tenantResolver,
             ISmsCodeService smsCodeService,
             IConfiguration configuration,
+            IOpenIddictApplicationManager applicationManager,
             ILogger<AuthorizationController> logger)
         {
             _userService = userService;
@@ -49,6 +51,7 @@ namespace OpenFindBearings.Identity.Controllers
             _tenantResolver = tenantResolver;
             _smsCodeService = smsCodeService;
             _configuration = configuration;
+            _applicationManager = applicationManager;
             _logger = logger;
         }
 
@@ -909,11 +912,11 @@ namespace OpenFindBearings.Identity.Controllers
         {
             await _signInManager.SignOutAsync();
 
-            // 自定义参数 admin_redirect：OpenIddict 不拦截，由我们自行校验白名单
+            // 从已注册的 OpenIddict 客户端动态获取 PostLogoutRedirectUris
             if (!string.IsNullOrEmpty(admin_redirect))
             {
-                var allowedUris = _configuration.GetSection("LogoutRedirectUris").Get<string[]>() ?? [];
-                if (allowedUris.Any(allowed => admin_redirect.StartsWith(allowed, StringComparison.OrdinalIgnoreCase)))
+                var isAllowed = await IsAllowedLogoutRedirectAsync(admin_redirect);
+                if (isAllowed)
                 {
                     _logger.LogInformation("结束会话，重定向至: {Uri}", admin_redirect);
                     return Redirect(admin_redirect);
@@ -929,6 +932,22 @@ namespace OpenFindBearings.Identity.Controllers
         {
             await _signInManager.SignOutAsync();
             return Redirect("~/");
+        }
+
+        /// <summary>
+        /// 校验注销回调地址是否在已注册客户端的 PostLogoutRedirectUris 白名单中
+        /// </summary>
+        private async Task<bool> IsAllowedLogoutRedirectAsync(string redirectUri)
+        {
+            await foreach (var application in _applicationManager.ListAsync())
+            {
+                var postLogoutUris = await _applicationManager.GetPostLogoutRedirectUrisAsync(application);
+                if (postLogoutUris.Any(uri => redirectUri.StartsWith(uri, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
