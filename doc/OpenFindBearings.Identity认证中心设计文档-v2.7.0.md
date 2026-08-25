@@ -1,7 +1,7 @@
 # OpenFindBearings.Identity 认证中心设计文档
 
 **版本：** v2.7.0
-**日期：** 2026-08-20
+**日期：** 2026-08-24
 **状态：** 与代码同步
 
 ---
@@ -297,7 +297,7 @@ src/OpenFindBearings.Identity/
 2. **Roles**：SuperAdmin, Admin, User, TestUser（idempotent）
 3. **Users**：7 个用户（2 admin + 5 测试用户，含 lockeduser）（idempotent，按 TenantId + UserName 唯一性）
 4. **UserRoles**：管理员配 SuperAdmin+Admin，其余配 User（idempotent）
-5. **Clients**：sync-client / maui-client / web-client / admin_client（创建后绑定到 OpenFindBearings 租户。maui-client 的 AllowedGrantTypes 新增 `sms`）
+5. **Clients**：sync-client / maui-client / web-client / admin_client（创建后绑定到 OpenFindBearings 租户。maui-client 的 AllowedGrantTypes 新增 `sms`。admin_client 的 RedirectUris 包含 `https://admin.515813.xyz/callback` 和 `https://admin.515813.xyz/signout-callback-oidc`）
 6. **Scopes**：api:sync / api:admin / api:maui / api:web（创建后绑定到 OpenFindBearings 租户。api:admin 关联双资源 [openfindbearings-api, openfindbearings-sync]，其余关联 openfindbearings-api）
 
 **常量说明：** `SmsCodeTypeConstants` 新增 `Register` 常量，用于区分注册场景的短信验证码类型。
