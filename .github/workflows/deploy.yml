@@ -151,10 +151,10 @@ jobs:
             -n $NAMESPACE \
             --record
 
-          echo "等待 rollout 完成（超时时间: 5分钟）..."
+          echo "等待 rollout 完成（超时时间: 10分钟）..."
           if ! kubectl rollout status deployment/$DEPLOYMENT \
             -n $NAMESPACE \
-            --timeout=5m; then
+            --timeout=10m; then
             echo ""
             echo "部署失败，正在回滚..."
             kubectl rollout undo deployment/$DEPLOYMENT \
