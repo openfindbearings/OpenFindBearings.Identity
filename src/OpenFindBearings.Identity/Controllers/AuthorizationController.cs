@@ -908,19 +908,20 @@ namespace OpenFindBearings.Identity.Controllers
         /// OIDC 结束会话端点（RP-Initiated Logout）
         /// </summary>
         [HttpGet("~/connect/logout")]
-        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null, string? admin_redirect = null)
+        public async Task<IActionResult> EndSession(string? post_logout_redirect_uri = null)
         {
             await _signInManager.SignOutAsync();
 
-            // 从已注册的 OpenIddict 客户端动态获取 PostLogoutRedirectUris
-            if (!string.IsNullOrEmpty(admin_redirect))
+            // 标准 OIDC RP-Initiated Logout：精确匹配已注册客户端的 PostLogoutRedirectUris
+            if (!string.IsNullOrEmpty(post_logout_redirect_uri))
             {
-                var isAllowed = await IsAllowedLogoutRedirectAsync(admin_redirect);
+                var isAllowed = await IsAllowedLogoutRedirectAsync(post_logout_redirect_uri);
                 if (isAllowed)
                 {
-                    _logger.LogInformation("结束会话，重定向至: {Uri}", admin_redirect);
-                    return Redirect(admin_redirect);
+                    _logger.LogInformation("结束会话，重定向至: {Uri}", post_logout_redirect_uri);
+                    return Redirect(post_logout_redirect_uri);
                 }
+                _logger.LogWarning("注销回调地址未在客户端 PostLogoutRedirectUris 中注册: {Uri}", post_logout_redirect_uri);
             }
 
             return Redirect("~/");
@@ -935,14 +936,14 @@ namespace OpenFindBearings.Identity.Controllers
         }
 
         /// <summary>
-        /// 校验注销回调地址是否在已注册客户端的 PostLogoutRedirectUris 白名单中
+        /// 校验注销回调地址是否精确匹配已注册客户端的 PostLogoutRedirectUris
         /// </summary>
         private async Task<bool> IsAllowedLogoutRedirectAsync(string redirectUri)
         {
             await foreach (var application in _applicationManager.ListAsync())
             {
                 var postLogoutUris = await _applicationManager.GetPostLogoutRedirectUrisAsync(application);
-                if (postLogoutUris.Any(uri => redirectUri.StartsWith(uri, StringComparison.OrdinalIgnoreCase)))
+                if (postLogoutUris.Any(uri => string.Equals(redirectUri, uri, StringComparison.OrdinalIgnoreCase)))
                 {
                     return true;
                 }
