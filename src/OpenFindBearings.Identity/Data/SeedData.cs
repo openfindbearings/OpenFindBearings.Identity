@@ -499,6 +499,7 @@ namespace OpenFindBearings.Identity.Data
                 {
                     Permissions.Endpoints.Authorization,
                     Permissions.Endpoints.Token,
+                    Permissions.Endpoints.EndSession,
                     Permissions.GrantTypes.AuthorizationCode,
                     Permissions.GrantTypes.RefreshToken,
                     Permissions.Scopes.Profile,
@@ -534,6 +535,7 @@ namespace OpenFindBearings.Identity.Data
                 {
                     Permissions.Endpoints.Authorization,
                     Permissions.Endpoints.Token,
+                    Permissions.Endpoints.EndSession,
                     Permissions.GrantTypes.AuthorizationCode,
                     Permissions.GrantTypes.RefreshToken,
                     Permissions.ResponseTypes.Code,
