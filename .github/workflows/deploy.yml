@@ -111,7 +111,7 @@ jobs:
       - name: Deploy to K3s
         env:
           NAMESPACE: "openfindbearings"
-          DEPLOYMENT: "openfindbearings-identity-deployment"
+          DEPLOYMENT: "openfindbearings-identity"
           CONTAINER: "openfindbearings-identity"
           IMAGE: "ghcr.io/${{ github.repository_owner }}/${{ needs.build-and-push.outputs.image_name }}:${{ needs.build-and-push.outputs.docker_tag }}"
         run: |
