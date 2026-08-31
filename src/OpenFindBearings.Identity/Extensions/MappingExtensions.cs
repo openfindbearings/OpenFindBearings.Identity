@@ -83,6 +83,7 @@ namespace OpenFindBearings.Identity.Extensions
                 ZoneInfo = dto.ZoneInfo,
                 Address = dto.Address.ToResponse(),
                 IsEnabled = dto.IsEnabled,
+                IsActive = dto.IsActive,
                 CreatedAt = dto.CreatedAt,
                 UpdatedAt = dto.UpdatedAt,
                 LastLoginAt = dto.LastLoginAt,

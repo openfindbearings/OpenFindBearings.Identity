@@ -96,6 +96,11 @@
         public bool IsEnabled { get; set; }
 
         /// <summary>
+        /// 是否活跃（未被软删除）
+        /// </summary>
+        public bool IsActive { get; set; }
+
+        /// <summary>
         /// 最后登录时间
         /// </summary>
         public DateTimeOffset? LastLoginAt { get; set; }
