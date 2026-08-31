@@ -641,14 +641,20 @@ namespace OpenFindBearings.Identity.Controllers
 
         private Guid? GetCurrentUserId()
         {
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // OpenIddict Validation 将 JWT sub 存为 "sub" 而非 ClaimTypes.NameIdentifier
+            var userIdStr = User.FindFirstValue(OpenIddict.Abstractions.OpenIddictConstants.Claims.Subject)
+                         ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return null;
             return Guid.Parse(userIdStr);
         }
 
         private string? GetCurrentUserName()
         {
-            return User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email);
+            // OpenIddict Validation 使用 "name"/"email" 而非 ClaimTypes.Name/ClaimTypes.Email
+            return User.FindFirstValue(OpenIddict.Abstractions.OpenIddictConstants.Claims.Name)
+                ?? User.FindFirstValue(OpenIddict.Abstractions.OpenIddictConstants.Claims.Email)
+                ?? User.FindFirstValue(ClaimTypes.Name)
+                ?? User.FindFirstValue(ClaimTypes.Email);
         }
 
         /// <summary>
