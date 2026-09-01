@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Persistence;
 using OpenFindBearings.Identity.Services;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
@@ -52,12 +54,15 @@ namespace OpenFindBearings.Identity.Extensions
         public static IServiceCollection AddOpenIddictService(this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
         {
             // DbContext
+            // 改动说明：PostgreSQL 服务器时区为 Asia/Shanghai，Npgsql 读 timestamptz 时按服务器时区
+            // 转为 +08 偏移。通过拦截器在连接打开时 SET timezone='UTC'，确保存取均为 UTC。
             services.AddDbContext<ApplicationDbContext>(options =>
             {
-                // Configure Entity Framework Core
-                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection") ?? 
+                options.UseNpgsql(
+                    configuration.GetConnectionString("DefaultConnection") ??
                     throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."),
                     b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
+                options.AddInterceptors(new UtcTimeZoneInterceptor());
 
                 // Register the entity sets needed by OpenIddict.
                 options.UseOpenIddict();
