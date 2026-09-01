@@ -472,9 +472,10 @@ namespace OpenFindBearings.Identity.Data
 
             await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
-                ClientId = "maui-client",
+                // 改动说明：maui-client 重命名为 mobile-client，与 Taro 移动端项目对齐
+                ClientId = "mobile-client",
                 ClientType = ClientTypes.Public,
-                DisplayName = "MAUI 客户端",
+                DisplayName = "移动端 Taro",
                 Permissions =
                 {
                     Permissions.Endpoints.Token,
@@ -484,9 +485,9 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Scopes.Profile,
                     Permissions.Scopes.Email,
                     Permissions.Scopes.Roles,
-                    Permissions.Prefixes.Scope + "api:maui"
+                    Permissions.Prefixes.Scope + "api:mobile"
                 }
-            }, "maui-client", ofbTenantId);
+            }, "mobile-client", ofbTenantId);
 
             await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {
@@ -543,7 +544,8 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Scopes.Email,
                     Permissions.Scopes.Roles,
                     Permissions.Prefixes.Scope + "openid",
-                    Permissions.Prefixes.Scope + "api:admin"
+                    Permissions.Prefixes.Scope + "api:admin",
+                    Permissions.Prefixes.Scope + "api:mobile"
                 }
             }, "admin_client", ofbTenantId);
         }
@@ -583,7 +585,8 @@ namespace OpenFindBearings.Identity.Data
 
             await CreateScopeWithTenantAsync("api:sync", new[] { ApiResourceConstants.BaseApi });
             await CreateScopeWithTenantAsync("api:admin", new[] { ApiResourceConstants.BaseApi, ApiResourceConstants.SyncApi });
-            await CreateScopeWithTenantAsync("api:maui", new[] { ApiResourceConstants.BaseApi });
+            // 改动说明：api:maui 统一重命名为 api:mobile
+            await CreateScopeWithTenantAsync("api:mobile", new[] { ApiResourceConstants.BaseApi });
             await CreateScopeWithTenantAsync("api:web", new[] { ApiResourceConstants.BaseApi });
         }
 
