@@ -7,7 +7,6 @@ using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.Entities;
-using OpenFindBearings.Identity.Persistence;
 using OpenFindBearings.Identity.Services;
 using OpenFindBearings.Identity.Services.Interfaces;
 using OpenIddict.Abstractions;
@@ -54,15 +53,13 @@ namespace OpenFindBearings.Identity.Extensions
         public static IServiceCollection AddOpenIddictService(this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
         {
             // DbContext
-            // 改动说明：PostgreSQL 服务器时区为 Asia/Shanghai，Npgsql 读 timestamptz 时按服务器时区
-            // 转为 +08 偏移。通过拦截器在连接打开时 SET timezone='UTC'，确保存取均为 UTC。
+            // 连接串 Timezone=UTC 确保 Npgsql 读写均为 UTC，无需自定义拦截器
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseNpgsql(
                     configuration.GetConnectionString("DefaultConnection") ??
                     throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."),
                     b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
-                options.AddInterceptors(new UtcTimeZoneInterceptor());
 
                 // Register the entity sets needed by OpenIddict.
                 options.UseOpenIddict();
