@@ -1,5 +1,6 @@
 ﻿using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
+using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,13 @@ builder.Services.ConfigureForwardedHeaders(builder.Environment.IsDevelopment());
 
 // 2. MVC
 builder.Services.AddControllersWithViews();
+
+// 改动说明：DateTime 统一输出为 UTC ISO 8601 带 Z 后缀，确保前端时区转换正确
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+    options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeConverter());
+});
 
 // 3. Identity + 其内置 Cookie 方案（与 Velusia 一致：不额外配置 cookie）
 builder.Services.AddIdentityService();
