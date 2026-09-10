@@ -12,7 +12,7 @@
 |------|------|----------|
 | v1.0.0 ~ v2.10.0 | 2026-05 ~ 09 | 见历史版本文件（用户/角色/租户隔离/OIDC 端点/SMS grant/设备绑定/客户端命名统一等） |
 | v2.11.0 | 2026-09-08 | 移动端登录与商户入驻设计评审结论纳入；提出 P1 安全完善清单 S1-S9 |
-| v2.12.0 | 2026-09-10 | ① access 寿命定案 **10 分钟**（曾拟改 5 分钟，实测权衡后维持 10，撤销全文 5 分钟表述）；② S1 账户锁定/S2 刷新查状态/S3 令牌吊销/S5 DP 持久化/S6 revocation 权限/S7 寿命 按已实现记录，S4 改部分完成，S8 更新进度；③ §5.2 受众编辑、§5.3 客户端管理修复按落地情况更新（CreateAsync 参数化仍待做）；④ §9 管理端点角色门禁已补齐；⑤ §10.2 Sync 令牌缓存改比例缓冲描述；⑥ §4 补 OpenIddict 双表合并 + 表名去 Oidc 前缀（DropOidcTablePrefix 迁移，RenameTable 无损）；⑦ §8 新增 S10 注册用户默认角色（待拍板）；⑧ §12 专项清单同步现状 |
+| v2.12.0 | 2026-09-10 | ① access 寿命定案 **10 分钟**（曾拟改 5 分钟，实测权衡后维持 10，撤销全文 5 分钟表述）；② S1 账户锁定/S2 刷新查状态/S3 令牌吊销/S5 DP 持久化/S6 revocation 权限/S7 寿命 按已实现记录，S4 改部分完成，S8 更新进度；③ §5.2 受众编辑、§5.3 客户端管理修复按落地情况更新（CreateAsync 参数化仍待做）；④ §9 管理端点角色门禁已补齐；⑤ §10.2 Sync 令牌缓存改比例缓冲描述；⑥ §4 补 OpenIddict 双表合并 + 表名去 Oidc 前缀（迁移历史重建为单一 InitialCreate 直建裸名表，存量库须 drop 重建）；⑦ §8 新增 S10 注册用户默认角色（待拍板）；⑧ §12 专项清单同步现状 |
 
 ---
 
@@ -76,9 +76,9 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 | OidcScope | `Scopes` |
 | OidcToken | `Tokens` |
 
-**双表合并（v2.12.0 落地）**：历史上 `options.UseOpenIddict()` 与自定义实体并存，导致库里多出一套 0 行的默认 string 键 `OpenIddict*` 壳表（真数据一直在带前缀的 Guid 键表）。已删除该行注册，并应用迁移 `ConsolidateOpenIddictTablesDropDefaults` drop 掉 4 张壳表；服务层读写与仪表盘计数统一走 `OpenIddictEntityFrameworkCoreApplication/Scope<Guid>` 等 Guid 键实体。
+**双表合并与表名去前缀（v2.12.0 落地）**：历史上 `options.UseOpenIddict()` 与自定义实体并存，导致库里多出一套 0 行的默认 string 键 `OpenIddict*` 壳表（真数据一直在带 `Oidc` 前缀的 Guid 键表）。收口方式：删除 `UseOpenIddict()` 注册；壳表清除后前缀失去区分意义，实体直接映射裸名（上表）。**迁移历史重建为单一 `InitialCreate(20260910111742)`** 直建裸名表全套（旧的 InitialCreate/Consolidate/DropOidcTablePrefix 三个迁移文件已删除），服务层读写与仪表盘计数统一走 `OpenIddictEntityFrameworkCoreApplication/Scope<Guid>` 等 Guid 键实体。
 
-**表名去前缀（v2.12.0 落地）**：壳表清除后 `Oidc` 前缀失去区分意义，经 `DropOidcTablePrefix` 迁移（RenameTable + 索引/主键/外键连带重命名，数据无损、Down 可逆）将 `OidcApplications/OidcAuthorizations/OidcScopes/OidcTokens` 更名为上表裸名。库内与 Users/Roles/UserTokens/Tenants 等既有表无重名冲突；无外部直连方（Admin/API/Sync 均不碰 db_identity）。线上随下次发布启动时自动执行。
+**迁移重建的运维含义**：迁移 ID 集合与旧库 `__EFMigrationsHistory` 不再对应，**存量库必须 drop 重建**（由启动 seed 自动建表+种子），不能原地升级。线上 db_identity 已按此重建并验证（16 表、裸名、登录恢复）；本地库下次启动前同样需 drop 重建。库内与 Users/Roles/UserTokens/Tenants 等既有表无重名冲突；无外部直连方（Admin/API/Sync 均不碰 db_identity）。
 
 ---
 

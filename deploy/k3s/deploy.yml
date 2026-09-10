@@ -22,10 +22,15 @@ spec:
       # 用 root 身份的 initContainer 在每次调度时纠正属主，防换节点/目录重建后再踩。
       # 实测容器内 `id` 为 uid=1654(app)（基础镜像自定义用户，非 .NET 默认 APP_UID=10001），
       # 属主必须跟实际 uid 一致；若将来更换基础镜像须同步核对该值。
+      # 镜像复用主容器同款 Identity 镜像（节点从 ghcr 拉取必可达；曾试 busybox 因
+      # docker.io 国内超时导致 Init:ImagePullBackOff）。runAsUser:0 覆盖镜像默认 USER 1654
+      # 以获得 chown 权限；chown 行为与镜像版本无关，tag 漂移无影响。
       initContainers:
       - name: dpkeys-init
-        image: busybox:1.36
+        image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.0
         command: ["sh", "-c", "chown -R 1654:1654 /app/dpkeys && chmod 700 /app/dpkeys"]
+        securityContext:
+          runAsUser: 0
         volumeMounts:
         - name: dpkeys
           mountPath: /app/dpkeys
