@@ -49,27 +49,30 @@ namespace OpenFindBearings.Identity.Data
 
             // OpenIddict Guid 键基类实体（ReplaceDefaultEntities<Guid>() 使用）
             // TenantId 作为影子属性用于租户隔离
+            // 改动说明：表名去掉 Oidc 前缀（OidcApplications→Applications 等）。前缀当初是为与
+            // 默认 string 键 OpenIddict* 壳表区分，壳表已被 ConsolidateOpenIddictTablesDropDefaults
+            // 迁移 drop，库内与 Applications/Authorizations/Scopes/Tokens 无重名表，配套 RenameTable 迁移执行。
             builder.Entity<OpenIddictEntityFrameworkCoreApplication<Guid>>(e =>
             {
-                e.ToTable("OidcApplications");
+                e.ToTable("Applications");
                 e.Property<Guid?>("TenantId");
                 e.HasIndex("TenantId");
             });
             builder.Entity<OpenIddictEntityFrameworkCoreAuthorization<Guid>>(e =>
             {
-                e.ToTable("OidcAuthorizations");
+                e.ToTable("Authorizations");
                 e.Property<Guid?>("TenantId");
                 e.HasIndex("TenantId");
             });
             builder.Entity<OpenIddictEntityFrameworkCoreScope<Guid>>(e =>
             {
-                e.ToTable("OidcScopes");
+                e.ToTable("Scopes");
                 e.Property<Guid?>("TenantId");
                 e.HasIndex("TenantId");
             });
             builder.Entity<OpenIddictEntityFrameworkCoreToken<Guid>>(e =>
             {
-                e.ToTable("OidcTokens");
+                e.ToTable("Tokens");
                 e.Property<Guid?>("TenantId");
                 e.HasIndex("TenantId");
             });
