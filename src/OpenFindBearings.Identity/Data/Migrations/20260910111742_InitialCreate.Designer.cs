@@ -12,8 +12,8 @@ using OpenFindBearings.Identity.Data;
 namespace OpenFindBearings.Identity.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260910071644_ConsolidateOpenIddictTablesDropDefaults")]
-    partial class ConsolidateOpenIddictTablesDropDefaults
+    [Migration("20260910111742_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -547,7 +547,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("OidcApplications", (string)null);
+                    b.ToTable("Applications", (string)null);
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization<System.Guid>", b =>
@@ -589,7 +589,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("OidcAuthorizations", (string)null);
+                    b.ToTable("Authorizations", (string)null);
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreScope<System.Guid>", b =>
@@ -629,7 +629,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("OidcScopes", (string)null);
+                    b.ToTable("Scopes", (string)null);
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken<System.Guid>", b =>
@@ -685,7 +685,7 @@ namespace OpenFindBearings.Identity.Data.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("OidcTokens", (string)null);
+                    b.ToTable("Tokens", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

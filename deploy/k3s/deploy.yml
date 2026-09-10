@@ -16,6 +16,19 @@ spec:
       labels:
         app: openfindbearings-identity
     spec:
+      # 改动说明：dpkeys 为 hostPath，kubelet 不支持对 hostPath 应用 fsGroup；
+      # DirectoryOrCreate 建出的目录属 root:0755，而容器以非 root 用户运行，
+      # 导致 Data Protection 写密钥 UnauthorizedAccessException（登录页 500）。
+      # 用 root 身份的 initContainer 在每次调度时纠正属主，防换节点/目录重建后再踩。
+      # 实测容器内 `id` 为 uid=1654(app)（基础镜像自定义用户，非 .NET 默认 APP_UID=10001），
+      # 属主必须跟实际 uid 一致；若将来更换基础镜像须同步核对该值。
+      initContainers:
+      - name: dpkeys-init
+        image: busybox:1.36
+        command: ["sh", "-c", "chown -R 1654:1654 /app/dpkeys && chmod 700 /app/dpkeys"]
+        volumeMounts:
+        - name: dpkeys
+          mountPath: /app/dpkeys
       containers:
       - name: openfindbearings-identity
         image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.0
