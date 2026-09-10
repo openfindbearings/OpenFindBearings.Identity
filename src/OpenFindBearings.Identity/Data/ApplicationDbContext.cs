@@ -49,9 +49,9 @@ namespace OpenFindBearings.Identity.Data
 
             // OpenIddict Guid 键基类实体（ReplaceDefaultEntities<Guid>() 使用）
             // TenantId 作为影子属性用于租户隔离
-            // 改动说明：表名去掉 Oidc 前缀（OidcApplications→Applications 等）。前缀当初是为与
-            // 默认 string 键 OpenIddict* 壳表区分，壳表已被 ConsolidateOpenIddictTablesDropDefaults
-            // 迁移 drop，库内与 Applications/Authorizations/Scopes/Tokens 无重名表，配套 RenameTable 迁移执行。
+            // 改动说明：表名去掉 Oidc 前缀（Applications/Authorizations/Scopes/Tokens）。前缀当初是为与
+            // 默认 string 键 OpenIddict* 壳表区分，壳表随 UseOpenIddict() 注册删除一并废弃；
+            // 迁移历史已重建为单一 InitialCreate(20260910111742) 直建裸名表，存量库需 drop 重建后由启动 seed 重建。
             builder.Entity<OpenIddictEntityFrameworkCoreApplication<Guid>>(e =>
             {
                 e.ToTable("Applications");
