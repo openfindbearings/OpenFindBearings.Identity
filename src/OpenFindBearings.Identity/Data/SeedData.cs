@@ -487,7 +487,11 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Scopes.Profile,
                     Permissions.Scopes.Email,
                     Permissions.Scopes.Roles,
-                    Permissions.Prefixes.Scope + "api:mobile"
+                    Permissions.Prefixes.Scope + "api:mobile",
+                    // 改动说明：password/sms grant 请求 offline_access scope 才签发 refresh_token，
+                    // 客户端须具 scp:offline_access 权限（与 Admin 无感续期同源问题），否则移动端
+                    // 登录响应无 refresh、冷启动登录态必丢。
+                    Permissions.Prefixes.Scope + "offline_access"
                 }
             }, "mobile-client", ofbTenantId);
 
@@ -557,8 +561,10 @@ namespace OpenFindBearings.Identity.Data
             // 幂等补丁：老库 seed 时 mobile-client 尚无 ept:revocation（登出吊销刷新令牌所需）。
             // CreateIfNotExistsAsync 只建不改，故此处对已存在的 mobile-client 追加缺失权限，不覆盖其它字段。
             // 这样发布新镜像即可让"登出吊销 + 改密/禁用/注销即时吊销"链路在既有 prod 库直接生效，免手工 SQL。
+            // 改动说明：补丁项追加 scp:offline_access——老库 mobile-client 建时没有该权限，
+            // 没有它 password grant 不签 refresh_token，移动端冷启动丢登录态；发布即自愈。
             await EnsureClientPermissionsAsync(context, logger, "mobile-client",
-                new[] { Permissions.Endpoints.Revocation });
+                new[] { Permissions.Endpoints.Revocation, Permissions.Prefixes.Scope + "offline_access" });
 
             // 幂等补丁：admin_client 需允许 offline_access（签发 refresh_token 的前提）。老库 CreateIfNotExists 只建不改，
             // 故对已存在的 admin_client 追加 scp:offline_access，发布即生效、免手工 SQL。
