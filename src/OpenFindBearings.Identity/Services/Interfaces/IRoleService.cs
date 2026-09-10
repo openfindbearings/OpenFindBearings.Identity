@@ -48,6 +48,11 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default);
 
         /// <summary>
+        /// 重命名角色。改动说明：补回角色改名能力（此前 Role CRUD 只留了创建/删除）。
+        /// </summary>
+        Task<ServiceResult> UpdateAsync(Guid id, string newName, CancellationToken ct = default);
+
+        /// <summary>
         /// 获取角色的用户数量
         /// </summary>
         Task<int> GetUserCountAsync(string roleName, CancellationToken ct = default);

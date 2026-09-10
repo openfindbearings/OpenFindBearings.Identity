@@ -29,6 +29,11 @@ namespace OpenFindBearings.Identity.Models.DTOs.Scope
         public IReadOnlyList<string>? Resources { get; set; }
 
         /// <summary>
+        /// 受众输入框原始文本（每行一个），由控制器拆分后填充 Resources。仅视图绑定用。
+        /// </summary>
+        public string? ResourcesText { get; set; }
+
+        /// <summary>
         /// 所属租户 ID
         /// </summary>
         [Required(ErrorMessage = "请选择租户")]

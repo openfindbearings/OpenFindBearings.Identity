@@ -1,0 +1,25 @@
+@model RoleDto
+@{
+    ViewData["Title"] = "编辑角色";
+}
+
+<h2>编辑角色</h2>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+}
+
+<form asp-action="Edit" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" value="@ViewBag.RoleId" />
+
+    <div class="mb-3">
+        <label class="form-label">角色名称</label>
+        <input type="text" name="name" value="@Model.Name" class="form-control" required />
+        <div class="form-text">重命名会同步更新所有已分配该角色的用户。</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
+</form>

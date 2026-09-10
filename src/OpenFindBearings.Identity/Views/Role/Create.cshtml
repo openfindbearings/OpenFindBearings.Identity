@@ -1,0 +1,23 @@
+@{
+    ViewData["Title"] = "新建角色";
+}
+
+<h2>新建角色</h2>
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="mb-3">
+        <label class="form-label">角色名称</label>
+        <input type="text" name="name" class="form-control" required />
+        <div class="form-text">角色名在系统内唯一（如：Admin、User、Merchant）。</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">创建</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
+</form>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+}

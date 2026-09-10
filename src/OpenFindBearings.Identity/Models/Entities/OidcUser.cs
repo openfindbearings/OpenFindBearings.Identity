@@ -306,7 +306,8 @@ namespace OpenFindBearings.Identity.Models.Entities
             AccessFailedCount = 0;
             LockoutEnd = null;
 
-            UpdatedAt = DateTimeOffset.UtcNow;
+            // 改动说明：登录（成功）属安全状态变更、非"资料编辑"，不再刷新 UpdatedAt；
+            // 登录时刻由 LastLoginAt 表达，UpdatedAt 仅反映资料被修改。
         }
 
         /// <summary>
@@ -320,7 +321,7 @@ namespace OpenFindBearings.Identity.Models.Entities
         public bool RecordFailedLogin(int maxAttempts = 5, int lockoutMinutes = 15)
         {
             AccessFailedCount++;
-            UpdatedAt = DateTimeOffset.UtcNow;
+            // 改动说明：登录失败属安全状态变更、非"资料编辑"，不再刷新 UpdatedAt（UpdatedAt 仅反映资料修改）。
 
             // 检查是否需要锁定
             if (AccessFailedCount >= maxAttempts && LockoutEnabled)

@@ -19,17 +19,20 @@ namespace OpenFindBearings.Identity.Services
         private readonly RoleManager<IdentityRole<Guid>> _roleManager;
         private readonly IAuditLogRepository _auditLogRepo;
         private readonly IPasswordHasher<OidcUser> _passwordHasher;
+        private readonly ITokenRevocationService _tokenRevocation;
 
         public UserService(
             UserManager<OidcUser> userManager,
             RoleManager<IdentityRole<Guid>> roleManager,
             IAuditLogRepository auditLogRepo,
-            IPasswordHasher<OidcUser> passwordHasher)
+            IPasswordHasher<OidcUser> passwordHasher,
+            ITokenRevocationService tokenRevocation)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _auditLogRepo = auditLogRepo;
             _passwordHasher = passwordHasher;
+            _tokenRevocation = tokenRevocation;
         }
 
         #region 查询
@@ -264,6 +267,26 @@ namespace OpenFindBearings.Identity.Services
             }
 
             user.UpdateProfile(request.Name, request.GivenName, request.FamilyName, request.Nickname, request.PictureUrl, request.WebsiteUrl);
+
+            // 改动说明：补充邮箱/手机号编辑（Keycloak 式）。邮箱走 UserManager.SetEmailAsync 以复用唯一性
+            // 校验；手机号直接赋值（UserManager 对 PhoneNumber 无唯一约束，业务上允许）。
+            if (!string.IsNullOrEmpty(request.Email) && !string.Equals(request.Email, user.Email, StringComparison.Ordinal))
+            {
+                var setEmail = await _userManager.SetEmailAsync(user, request.Email);
+                if (!setEmail.Succeeded)
+                {
+                    return ServiceResult.Failure(setEmail.Errors.Select(e => new ServiceError
+                    {
+                        Code = e.Code,
+                        Description = e.Description
+                    }).ToArray());
+                }
+            }
+            if (request.PhoneNumber != null)
+            {
+                user.PhoneNumber = request.PhoneNumber;
+            }
+
             var result = await _userManager.UpdateAsync(user);
 
             if (!result.Succeeded)
@@ -305,6 +328,8 @@ namespace OpenFindBearings.Identity.Services
             }
 
             await _auditLogRepo.LogUserActionAsync(user.Id, user.UserName, "DeleteUser", user.Id.ToString(), null, true, null, ct);
+            // 改动说明：注销（软删）即吊销该主体全部刷新令牌，使其各端会话即时失效（access 短时效自然过期）
+            await _tokenRevocation.RevokeAllRefreshTokensAsync(user.Sub, ct);
             return ServiceResult.Success();
         }
 
@@ -416,6 +441,8 @@ namespace OpenFindBearings.Identity.Services
             }
 
             await _auditLogRepo.LogUserActionAsync(user.Id, user.UserName, "DisableUser", user.Id.ToString(), null, true, null, ct);
+            // 改动说明：禁用即吊销全部刷新令牌；配合刷新链路的 CheckCanLoginAsync，双保险使被禁用户即时掉线
+            await _tokenRevocation.RevokeAllRefreshTokensAsync(user.Sub, ct);
             return ServiceResult.Success();
         }
 
@@ -468,6 +495,8 @@ namespace OpenFindBearings.Identity.Services
             }
 
             await _auditLogRepo.LogUserActionAsync(user.Id, user.UserName, "ResetPassword", user.Id.ToString(), null, true, null, ct);
+            // 改动说明：改密/重置密码后吊销全部刷新令牌，旧会话需凭新密码重新登录
+            await _tokenRevocation.RevokeAllRefreshTokensAsync(user.Sub, ct);
             return ServiceResult<string>.Success("密码重置成功");
         }
 

@@ -17,6 +17,12 @@ namespace OpenFindBearings.Identity.Services
             _logger = logger;
         }
 
+        public async Task<int> GetCountAsync(CancellationToken ct = default)
+        {
+            // 改动说明：仪表盘统计租户数量走 service，控制器不再直连 DbContext。
+            return await _db.Tenants.CountAsync(ct);
+        }
+
         public async Task<PaginatedResult<TenantDto>> GetPagedAsync(int page, int size, string? search = null, CancellationToken ct = default)
         {
             var query = _db.Tenants.AsQueryable();

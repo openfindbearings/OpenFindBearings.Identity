@@ -479,6 +479,8 @@ namespace OpenFindBearings.Identity.Data
                 Permissions =
                 {
                     Permissions.Endpoints.Token,
+                    // 改动说明：移动端登出需调 /connect/revocation 吊销 refresh，补 Revocation 端点权限
+                    Permissions.Endpoints.Revocation,
                     Permissions.GrantTypes.Password,
                     Permissions.GrantTypes.RefreshToken,
                     Permissions.Prefixes.GrantType + "sms",
@@ -545,9 +547,67 @@ namespace OpenFindBearings.Identity.Data
                     Permissions.Scopes.Roles,
                     Permissions.Prefixes.Scope + "openid",
                     Permissions.Prefixes.Scope + "api:admin",
-                    Permissions.Prefixes.Scope + "api:mobile"
+                    Permissions.Prefixes.Scope + "api:mobile",
+                    // 改动说明：允许 admin_client 请求 offline_access，OpenIddict 授权码流程据此签发 refresh_token，
+                    // 使 Admin 能在 access 过期后无感续期（此前缺它 → cookie 无 refresh → 过期即全站 401）。
+                    Permissions.Prefixes.Scope + "offline_access"
                 }
             }, "admin_client", ofbTenantId);
+
+            // 幂等补丁：老库 seed 时 mobile-client 尚无 ept:revocation（登出吊销刷新令牌所需）。
+            // CreateIfNotExistsAsync 只建不改，故此处对已存在的 mobile-client 追加缺失权限，不覆盖其它字段。
+            // 这样发布新镜像即可让"登出吊销 + 改密/禁用/注销即时吊销"链路在既有 prod 库直接生效，免手工 SQL。
+            await EnsureClientPermissionsAsync(context, logger, "mobile-client",
+                new[] { Permissions.Endpoints.Revocation });
+
+            // 幂等补丁：admin_client 需允许 offline_access（签发 refresh_token 的前提）。老库 CreateIfNotExists 只建不改，
+            // 故对已存在的 admin_client 追加 scp:offline_access，发布即生效、免手工 SQL。
+            await EnsureClientPermissionsAsync(context, logger, "admin_client",
+                new[] { Permissions.Prefixes.Scope + "offline_access" });
+        }
+
+        /// <summary>
+        /// 幂等补齐指定客户端的权限集：仅追加缺失项、不动既有项。Permissions 为 EF JSON 文本列，直接反序列化后追加。
+        /// </summary>
+        private static async Task EnsureClientPermissionsAsync(
+            ApplicationDbContext context,
+            ILogger logger,
+            string clientId,
+            string[] requiredPermissions)
+        {
+            var apps = context.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+            var app = await apps.AsTracking().FirstOrDefaultAsync(a => a.ClientId == clientId);
+            if (app == null) return;
+
+            List<string> perms;
+            try
+            {
+                perms = string.IsNullOrEmpty(app.Permissions)
+                    ? new List<string>()
+                    : (System.Text.Json.JsonSerializer.Deserialize<List<string>>(app.Permissions) ?? new List<string>());
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "解析客户端 {ClientId} Permissions 失败，跳过幂等补丁", clientId);
+                return;
+            }
+
+            var changed = false;
+            foreach (var p in requiredPermissions)
+            {
+                if (!perms.Contains(p))
+                {
+                    perms.Add(p);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                app.Permissions = System.Text.Json.JsonSerializer.Serialize(perms);
+                await context.SaveChangesAsync();
+                logger.LogInformation("幂等补丁：客户端 {ClientId} 追加权限 {Perms}", clientId, string.Join(",", requiredPermissions));
+            }
         }
 
         private static async Task SeedScopesAsync(IOpenIddictScopeManager scopeManager, ApplicationDbContext context, ILogger logger)

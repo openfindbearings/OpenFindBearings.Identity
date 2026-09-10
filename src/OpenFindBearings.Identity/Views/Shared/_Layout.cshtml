@@ -41,6 +41,11 @@
                         <i class="bi bi-shield-check me-2"></i>Scope 管理
                     </a>
                 </li>
+                <li>
+                    <a asp-controller="Role" asp-action="Index" class="nav-link text-white @(ViewContext.RouteData.Values["controller"]?.ToString() == "Role" ? "active" : "")">
+                        <i class="bi bi-person-badge me-2"></i>角色管理
+                    </a>
+                </li>
             </ul>
             <hr />
             <div class="dropdown">

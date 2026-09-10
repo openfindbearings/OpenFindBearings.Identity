@@ -63,6 +63,16 @@ namespace OpenFindBearings.Identity.Services
             return new PaginatedResult<ScopeDto>(scopes, total, page, size);
         }
 
+        public async Task<int> GetCountAsync(Guid? tenantId = null, CancellationToken ct = default)
+        {
+            // 改动说明：仪表盘统计 Scope 数量走 service，控制器不再直连 DbContext/实体。
+            var scopesSet = _dbContext.Set<OpenIddictEntityFrameworkCoreScope<Guid>>();
+            var query = scopesSet.AsNoTracking();
+            if (tenantId.HasValue)
+                query = query.Where(s => EF.Property<Guid?>(s, "TenantId") == tenantId.Value);
+            return await query.CountAsync(ct);
+        }
+
         public async Task<ScopeDto?> GetByNameAsync(string name, CancellationToken ct = default)
         {
             var scope = await _scopeManager.FindByNameAsync(name, ct);
@@ -189,10 +199,23 @@ namespace OpenFindBearings.Identity.Services
                 Description = request.Description
             };
 
-            var existingResources = await _scopeManager.GetResourcesAsync(scope, ct);
-            foreach (var resource in existingResources)
+            // 改动说明：受众(Resources)可编辑——request.Resources 非 null 表示整体替换；
+            // 为 null 表示本次不改受众，保留既有（兼容仅改名称/描述的场景）。
+            if (request.Resources != null)
             {
-                descriptor.Resources.Add(resource);
+                foreach (var resource in request.Resources)
+                {
+                    if (!string.IsNullOrWhiteSpace(resource))
+                        descriptor.Resources.Add(resource.Trim());
+                }
+            }
+            else
+            {
+                var existingResources = await _scopeManager.GetResourcesAsync(scope, ct);
+                foreach (var resource in existingResources)
+                {
+                    descriptor.Resources.Add(resource);
+                }
             }
 
             await _scopeManager.UpdateAsync(scope, descriptor, ct);
