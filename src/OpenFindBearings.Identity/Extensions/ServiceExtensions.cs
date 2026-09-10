@@ -61,8 +61,10 @@ namespace OpenFindBearings.Identity.Extensions
                     throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."),
                     b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
 
-                // Register the entity sets needed by OpenIddict.
-                options.UseOpenIddict();
+                // 改动说明：移除 options.UseOpenIddict()。它会注册默认(string 键)实体 → 生成一套无人使用的
+                // 空壳表 OpenIddictApplications/Scopes/Tokens/Authorizations。本项目实际用的是
+                // ReplaceDefaultEntities<Guid>() + ApplicationDbContext.OnModelCreating 里显式映射到 Oidc* 的
+                // Guid 键实体（带 TenantId 隔离）。删掉此行后模型只剩 Oidc* 一套，配套迁移 drop 掉空壳表。
             });
 
             // OpenIddict offers native integration with Quartz.NET to perform scheduled tasks
@@ -121,7 +123,11 @@ namespace OpenFindBearings.Identity.Extensions
                     else
                     {
                         // 生产环境加载真实证书 (从文件、KeyVault 或 K8s Secret)
-                        var certPassword = configuration["OpenIddict:certpwd"] ?? "111111";
+                        // 改动说明：移除硬编码默认密码 "111111"（明文入源码属安全反模式），
+                        // 生产必须经 OpenIddict:certpwd 配置（K8s Secret）注入，缺失即快速失败而非静默用弱口令。
+                        var certPassword = configuration["OpenIddict:certpwd"]
+                            ?? throw new InvalidOperationException(
+                                "生产环境必须通过配置 OpenIddict:certpwd 注入证书密码（K8s Secret），不得使用内置默认值。");
 
                         var encryptionCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/encryption.pfx", certPassword);
                         var signingCert = X509CertificateLoader.LoadPkcs12FromFile("/app/certs/signing.pfx", certPassword);
@@ -147,7 +153,7 @@ namespace OpenFindBearings.Identity.Extensions
                     options.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.Phone, Scopes.Address);
 
                     // 配置令牌的有效期
-                    options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10))        // A. 访问令牌有效期
+                    options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10))        // A. 访问令牌有效期（改动：5→10 分钟，10 分钟体感不长、减少刷新频率）
                            .SetRefreshTokenLifetime(TimeSpan.FromDays(30));         // B. 刷新令牌绝对有效期
 
                     // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
@@ -188,6 +194,8 @@ namespace OpenFindBearings.Identity.Extensions
             services.AddScoped<ISystemConfigService, SystemConfigService>();
             services.AddScoped<ISmsCodeService, SmsCodeService>();
             services.AddScoped<ITenantService, TenantService>();
+            // 令牌吊销服务：改密/禁用/注销即时失效 + 移动端单设备互踢
+            services.AddScoped<ITokenRevocationService, TokenRevocationService>();
 
             // 注册 Repositories
             services.AddScoped<IAuditLogRepository, AuditLogRepository>();

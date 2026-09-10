@@ -14,6 +14,11 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<PaginatedResult<ScopeDto>> GetPagedAsync(int page, int size, string? search = null, Guid? tenantId = null, CancellationToken ct = default);
 
         /// <summary>
+        /// 统计 Scope 数量（tenantId 为空则全局统计）。供仪表盘使用，避免控制器直连 DbContext。
+        /// </summary>
+        Task<int> GetCountAsync(Guid? tenantId = null, CancellationToken ct = default);
+
+        /// <summary>
         /// 根据名称获取 Scope
         /// </summary>
         Task<ScopeDto?> GetByNameAsync(string name, CancellationToken ct = default);

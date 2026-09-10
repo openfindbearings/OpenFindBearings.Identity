@@ -1,21 +1,91 @@
 @model UpdateClientDto
+@using OpenFindBearings.Identity.Models.DTOs.Client
 @{
     ViewData["Title"] = "编辑客户端";
+    ClientDto client = ViewBag.Client;
+    var allScopes = (IReadOnlyList<string>)ViewBag.AllScopes;
 }
 
 <h2>编辑客户端</h2>
 
-<form asp-action="Edit" method="post">
+@* 改动说明：表单补 asp-route-clientId，把 clientId 随 POST 带回控制器（原缺失导致 clientId=null→Forbid→保存无反应）。
+   Keycloak 式：基础配置与回调/作用域可编辑；ClientId 与 ept 类权限只读展示。 *@
+<form asp-action="Edit" asp-route-clientId="@ViewBag.ClientId" method="post">
     @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
     <div class="mb-3">
         <label asp-for="DisplayName" class="form-label"></label>
         <input asp-for="DisplayName" class="form-control" />
     </div>
 
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="ClientType" class="form-label">访问类型</label>
+            <select asp-for="ClientType" class="form-select">
+                <option value="confidential">机密（confidential，带 client_secret）</option>
+                <option value="public">公开（public，无 secret，仅授权码/PKCE）</option>
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="ConsentType" class="form-label">同意要求</label>
+            <select asp-for="ConsentType" class="form-select">
+                <option value="explicit">显式同意（explicit）</option>
+                <option value="implicit">隐式免同意（implicit）</option>
+                <option value="external">外部同意（external）</option>
+                <option value="none">不要求（none）</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="RedirectUrisText" class="form-label">回调地址（RedirectUris，每行一个）</label>
+        <textarea asp-for="RedirectUrisText" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="PostLogoutUrisText" class="form-label">登出回调地址（PostLogoutRedirectUris，每行一个）</label>
+        <textarea asp-for="PostLogoutUrisText" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">允许的作用域（AllowedScopes）</label>
+        @foreach (var scope in allScopes)
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="AllowedScopes" value="@scope"
+                       id="scope-@scope" @(Model.AllowedScopes != null && Model.AllowedScopes.Contains(scope) ? "checked" : "") />
+                <label class="form-check-label" for="scope-@scope">@scope</label>
+            </div>
+        }
+        <div class="form-text">勾选会写入 scp:* 权限；未勾选的原 scp 权限会被移除，端点权限不受影响。</div>
+    </div>
+
     <button type="submit" class="btn btn-primary">保存</button>
     <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
 </form>
+
+<hr />
+
+@* 只读信息（不可编辑） *@
+<h5 class="text-muted">只读信息</h5>
+
+<div class="mb-3">
+    <label class="form-label">客户端 ID（ClientId）</label>
+    <input class="form-control" value="@client.ClientId" readonly disabled />
+</div>
+
+<div class="mb-3">
+    <label class="form-label">权限（Permissions）</label>
+    @foreach (var perm in client.Permissions)
+    {
+        <code class="d-block mb-1">@perm</code>
+    }
+    @if (!client.Permissions.Any())
+    {
+        <input class="form-control" value="（无）" readonly disabled />
+    }
+</div>
 
 @section Scripts {
     @await Html.PartialAsync("_ValidationScriptsPartial")

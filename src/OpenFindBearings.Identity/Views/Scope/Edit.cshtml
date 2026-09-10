@@ -5,8 +5,14 @@
 
 <h2>编辑 Scope</h2>
 
-<form asp-action="Edit" method="post">
+@* 改动说明：表单补 asp-route-name 回带主键（原缺失导致 POST name=null→Forbid→保存无反应）；新增受众(Resources)编辑 *@
+<form asp-action="Edit" asp-route-name="@ViewBag.Name" method="post">
     @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label class="form-label">Scope 名称（Name，主键，不可改）</label>
+        <input class="form-control" value="@ViewBag.Name" readonly disabled />
+    </div>
 
     <div class="mb-3">
         <label asp-for="DisplayName" class="form-label"></label>
@@ -16,6 +22,12 @@
     <div class="mb-3">
         <label asp-for="Description" class="form-label"></label>
         <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ResourcesText" class="form-label">受众 / 资源（Audience）</label>
+        <textarea asp-for="ResourcesText" class="form-control" rows="4" placeholder="openfindbearings-api&#10;openfindbearings-sync"></textarea>
+        <div class="form-text">每行一个受众（也可逗号分隔）。令牌请求该 scope 时，这些值会进入 access token 的 aud。</div>
     </div>
 
     <button type="submit" class="btn btn-primary">保存</button>

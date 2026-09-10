@@ -6,6 +6,10 @@ namespace OpenFindBearings.Identity.Services.Interfaces
     public interface ITenantService
     {
         Task<PaginatedResult<TenantDto>> GetPagedAsync(int page, int size, string? search = null, CancellationToken ct = default);
+        /// <summary>
+        /// 统计租户数量。供仪表盘使用，避免控制器直连 DbContext。
+        /// </summary>
+        Task<int> GetCountAsync(CancellationToken ct = default);
         Task<TenantDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
         Task<ServiceResult<TenantDto>> CreateAsync(CreateTenantDto request, CancellationToken ct = default);
         Task<ServiceResult> UpdateAsync(Guid id, UpdateTenantDto request, CancellationToken ct = default);

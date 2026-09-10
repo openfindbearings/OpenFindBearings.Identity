@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace OpenFindBearings.Identity.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "SuperAdmin,Admin")]
     public class ScopeController : Controller
     {
         private readonly IScopeService _scopeService;
@@ -67,6 +67,10 @@ namespace OpenFindBearings.Identity.Controllers
                 return View(request);
             }
 
+            // 改动说明：受众输入文本拆成列表交给 service（此前新建 UI 未暴露受众，Resources 恒为 null）
+            if (request.ResourcesText != null)
+                request.Resources = SplitResources(request.ResourcesText);
+
             var result = await _scopeService.CreateAsync(request, request.TenantId);
             if (!result.IsSuccess)
             {
@@ -89,10 +93,15 @@ namespace OpenFindBearings.Identity.Controllers
             if (scope == null)
                 return NotFound();
 
+            // 改动说明：把 name 传给视图供 POST 回带（原表单漏带导致 name=null→Forbid→保存无反应）；
+            // 受众以每行一个文本呈现，编辑时可增删。
+            ViewBag.Name = name;
             return View(new UpdateScopeDto
             {
                 DisplayName = scope.DisplayName,
-                Description = scope.Description
+                Description = scope.Description,
+                Resources = scope.Resources,
+                ResourcesText = string.Join("\n", scope.Resources ?? [])
             });
         }
 
@@ -100,12 +109,18 @@ namespace OpenFindBearings.Identity.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(string name, UpdateScopeDto request)
         {
+            // 改动说明：失败回显也要带 name，否则重渲染表单再丢 name。
+            ViewBag.Name = name;
             if (!ModelState.IsValid)
                 return View(request);
 
             var tenantId = await GetCurrentUserTenantIdAsync();
             if (!await _scopeService.IsScopeInTenantAsync(name, tenantId))
                 return Forbid();
+
+            // 受众：ResourcesText 非 null 表示本次要改受众，拆分成列表交给 service（空则清空）
+            if (request.ResourcesText != null)
+                request.Resources = SplitResources(request.ResourcesText);
 
             var result = await _scopeService.UpdateAsync(name, request);
             if (!result.IsSuccess)
@@ -116,6 +131,19 @@ namespace OpenFindBearings.Identity.Controllers
 
             TempData["Success"] = "Scope 更新成功";
             return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
+        /// 把受众输入文本（每行一个 / 逗号分隔）拆成去重非空列表。
+        /// </summary>
+        private static List<string> SplitResources(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return new List<string>();
+            return text.Split(new[] { '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                       .Select(s => s.Trim())
+                       .Where(s => s.Length > 0)
+                       .Distinct()
+                       .ToList();
         }
 
         [HttpPost]

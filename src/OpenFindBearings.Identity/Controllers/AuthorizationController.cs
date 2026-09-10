@@ -29,6 +29,7 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly ISmsCodeService _smsCodeService;
         private readonly IConfiguration _configuration;
         private readonly IOpenIddictApplicationManager _applicationManager;
+        private readonly ITokenRevocationService _tokenRevocation;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
@@ -41,6 +42,7 @@ namespace OpenFindBearings.Identity.Controllers
             ISmsCodeService smsCodeService,
             IConfiguration configuration,
             IOpenIddictApplicationManager applicationManager,
+            ITokenRevocationService tokenRevocation,
             ILogger<AuthorizationController> logger)
         {
             _userService = userService;
@@ -52,6 +54,7 @@ namespace OpenFindBearings.Identity.Controllers
             _smsCodeService = smsCodeService;
             _configuration = configuration;
             _applicationManager = applicationManager;
+            _tokenRevocation = tokenRevocation;
             _logger = logger;
         }
 
@@ -566,6 +569,10 @@ namespace OpenFindBearings.Identity.Controllers
             _logger.LogInformation("密码模式: 用户 {Username} 登录成功, Scopes={Scopes}",
                 request.Username, string.Join(",", scopes));
 
+            // 改动说明：单设备互踢——签发新令牌前吊销该主体在本客户端下的旧刷新令牌，旧设备下次刷新即被拒。
+            // password/sms grant 仅移动端 mobile-client 使用，按 client 隔离天然不波及 Admin 网页/Sync 会话。
+            await _tokenRevocation.RevokeRefreshTokensForClientAsync(user.Sub, request.ClientId);
+
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
@@ -599,6 +606,17 @@ namespace OpenFindBearings.Identity.Controllers
             {
                 userId = uid;
                 user = await _userManager.FindByIdAsync(subject);
+            }
+
+            // 改动说明：刷新链路补用户可用性校验，与 password/sms 授权对齐——禁用/注销后凭旧刷新令牌也无法续期，即时掉线
+            if (user != null && !await _userService.CheckCanLoginAsync(user.Id))
+            {
+                _logger.LogWarning("刷新令牌: 用户不可用（禁用/锁定/注销）UserId={UserId}", userId);
+                return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The account is not available."
+                }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
             // 验证租户：请求中的 realm/tenant_id 必须与用户的 TenantId 一致
@@ -855,6 +873,9 @@ namespace OpenFindBearings.Identity.Controllers
             _logger.LogInformation("SMS模式: 用户 {Phone} 登录成功, Scopes={Scopes}",
                 phone, scopes.Count == 0 ? "none" : string.Join(",", scopes));
 
+            // 改动说明：与密码授权一致的移动端单设备互踢，签发前吊销本客户端下该主体旧刷新令牌
+            await _tokenRevocation.RevokeRefreshTokensForClientAsync(user.Sub, request.ClientId);
+
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
@@ -1078,7 +1099,9 @@ namespace OpenFindBearings.Identity.Controllers
         if (tenantInfo.TenantId == null)
             return null;
 
-        var standardScopes = new HashSet<string> { "openid", "profile", "email", "phone", "address", "roles" };
+        // 改动说明：offline_access 是 OpenIddict 内置 scope（签发 refresh_token 用），非租户业务 scope，
+        // 加入白名单避免被租户 scope 校验拒绝（否则 Admin 带 offline_access 登录报 Invalid scope）。
+        var standardScopes = new HashSet<string> { "openid", "profile", "email", "phone", "address", "roles", "offline_access" };
         var requestedScopes = request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var scope in requestedScopes)

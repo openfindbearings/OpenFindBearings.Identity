@@ -2,6 +2,9 @@
 using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Middleware;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +32,43 @@ builder.Services.AddApplicationServices();
 builder.Services.AddCorsService(builder.Configuration);
 builder.Services.AddHealthChecksService();
 
+// 5.1 Data Protection 密钥持久化：未配置路径时沿用默认（临时目录，进程重启即失效）。
+// 改动说明：K3s 下 Pod 重启会使 OIDC 关联/防伪 state 与认证 cookie 解密失败，用户被无端要求重新登录。
+// 配置 DataProtection:KeysPath（挂载 hostPath/PVC）后密钥跨重启保留。
+var dpKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrEmpty(dpKeysPath))
+{
+    Directory.CreateDirectory(dpKeysPath);
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath))
+        .SetApplicationName("OpenFindBearings.Identity");
+}
+
+// 5.2 认证端点限流：对 /connect/*、signup、send-code 按客户端 IP 固定窗口限流，抵御令牌端点暴力/洪水。
+// 其余路径返回 null（不加限流器）。配合已启用的账号锁定(Lockout)构成"每账号 + 每 IP"两层防护。
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+    {
+        var path = ctx.Request.Path.Value ?? string.Empty;
+        var isAuthPath = path.StartsWith("/connect/", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/account/signup", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/sms/send-code", StringComparison.OrdinalIgnoreCase);
+        if (!isAuthPath)
+        {
+            return RateLimitPartition.GetNoLimiter("none"); // 非认证路径不加限流器
+        }
+        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    });
+});
+
 var app = builder.Build();
 
 app.Logger.LogInformation("启动 OpenFindBearings Identity");
@@ -45,6 +85,9 @@ else
 
 // 7. 转发头（K3s 反向代理需要）
 app.UseForwardedHeaders();
+
+// 7.1 认证端点限流（须在转发头之后，取真实客户端 IP）
+app.UseRateLimiter();
 
 // 8. HTTPS 重定向
 app.UseHttpsRedirection();

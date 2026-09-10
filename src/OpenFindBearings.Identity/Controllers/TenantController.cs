@@ -5,7 +5,7 @@ using OpenFindBearings.Identity.Services.Interfaces;
 
 namespace OpenFindBearings.Identity.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "SuperAdmin,Admin")]
     public class TenantController : Controller
     {
         private readonly ITenantService _tenantService;

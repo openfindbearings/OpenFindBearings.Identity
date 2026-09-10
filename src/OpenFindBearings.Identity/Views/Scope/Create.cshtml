@@ -34,6 +34,13 @@
         <textarea asp-for="Description" class="form-control" rows="3"></textarea>
     </div>
 
+    @* 改动说明：新建也暴露受众输入（此前 Resources 恒为 null，无法在建时设定） *@
+    <div class="mb-3">
+        <label asp-for="ResourcesText" class="form-label">受众 / 资源（Audience）</label>
+        <textarea asp-for="ResourcesText" class="form-control" rows="4" placeholder="openfindbearings-api&#10;openfindbearings-sync"></textarea>
+        <div class="form-text">每行一个受众（也可逗号分隔）。令牌请求该 scope 时，这些值会进入 access token 的 aud。</div>
+    </div>
+
     <button type="submit" class="btn btn-primary">创建</button>
     <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
 </form>

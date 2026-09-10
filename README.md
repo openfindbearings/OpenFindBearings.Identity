@@ -25,23 +25,3 @@ OAuth 2.0 / OpenID Connect 认证中心，为所有业务系统提供统一的�
 | sync-client | Client Credentials | Sync ETL 服务 |
 | mobile-client | Password + SMS | 移动端 Taro App |
 | web-client | Authorization Code + PKCE | Web 前端 |
-
-## 构建与运行
-
-```bash
-cd OpenFindBearings.Identity
-dotnet restore
-dotnet run --project src/OpenFindBearings.Identity
-```
-
-启动后自动迁移数据库并写入种子数据（管理员账号 `Admin@123456`）。
-
-## 部署
-
-```bash
-# K3s 部署
-kubectl apply -f deploy/k3s/
-```
-
-- 域名：`auth.abcsxl.com`
-- 数据库：SQLite（可丢库重建，无生产数据）

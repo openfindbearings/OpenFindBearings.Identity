@@ -5,7 +5,7 @@ using OpenFindBearings.Identity.Services.Interfaces;
 
 namespace OpenFindBearings.Identity.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "SuperAdmin,Admin")]
     public class UsersController : Controller
     {
         private readonly IUserService _userService;
@@ -84,6 +84,62 @@ namespace OpenFindBearings.Identity.Controllers
             }
 
             TempData["Success"] = "用户创建成功";
+            return RedirectToAction(nameof(Index));
+        }
+
+        public async Task<IActionResult> Edit(Guid id)
+        {
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null) return NotFound();
+
+            ViewBag.Roles = await _roleService.GetAllAsync();
+            ViewBag.UserRoles = (await _userService.GetRolesAsync(id)).ToHashSet();
+            ViewBag.UserId = id;
+            ViewBag.User = user;
+
+            return View(new Models.DTOs.User.UpdateUserDto
+            {
+                Name = user.Name,
+                GivenName = user.GivenName,
+                FamilyName = user.FamilyName,
+                Nickname = user.Nickname,
+                PictureUrl = user.PictureUrl,
+                WebsiteUrl = user.WebsiteUrl,
+                Gender = user.Gender,
+                Birthdate = user.Birthdate,
+                Locale = user.Locale,
+                ZoneInfo = user.ZoneInfo
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(Guid id, Models.DTOs.User.UpdateUserDto request, string[]? roles)
+        {
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null) return NotFound();
+
+            ViewBag.Roles = await _roleService.GetAllAsync();
+            ViewBag.UserRoles = (await _userService.GetRolesAsync(id)).ToHashSet();
+            ViewBag.UserId = id;
+            ViewBag.User = user;
+
+            if (!ModelState.IsValid) return View(request);
+
+            var result = await _userService.UpdateAsync(id, request);
+            if (!result.IsSuccess)
+            {
+                ModelState.AddModelError("", result.Errors.FirstOrDefault()?.Description ?? "更新失败");
+                return View(request);
+            }
+
+            // 改动说明：角色勾选列表整体替换（SetRolesAsync 已实现"替换现有角色"语义）
+            if (roles != null)
+            {
+                await _userService.SetRolesAsync(id, roles);
+            }
+
+            TempData["Success"] = "用户信息已更新";
             return RedirectToAction(nameof(Index));
         }
 

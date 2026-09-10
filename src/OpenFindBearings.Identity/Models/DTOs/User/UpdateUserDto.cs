@@ -10,6 +10,12 @@ namespace OpenFindBearings.Identity.Models.DTOs.User
         /// <summary>全名</summary>
         public string? Name { get; set; }
 
+        /// <summary>邮箱。改动说明：补充管理员可编辑邮箱（Keycloak 式）。</summary>
+        public string? Email { get; set; }
+
+        /// <summary>手机号。改动说明：补充管理员可编辑手机号（Keycloak 式）。</summary>
+        public string? PhoneNumber { get; set; }
+
         /// <summary>名</summary>
         public string? GivenName { get; set; }
 

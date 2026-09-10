@@ -31,6 +31,9 @@ spec:
           value: "10.42.0.0/16"  # 根据实际集群配置
         - name: SERVICE_NETWORK_CIDR
           value: "10.43.0.0/16"
+        # 改动说明：Data Protection 密钥持久化目录，避免 Pod 重启导致 OIDC 关联 state / 认证 cookie 解密失效
+        - name: DataProtection__KeysPath
+          value: "/app/dpkeys"
         envFrom:
         - secretRef:
             name: openfindbearings-identity-secrets
@@ -41,6 +44,8 @@ spec:
         - name: certs
           mountPath: /app/certs
           readOnly: true
+        - name: dpkeys
+          mountPath: /app/dpkeys
         
         livenessProbe:
           httpGet:
@@ -65,6 +70,11 @@ spec:
       - name: certs
         secret:
           secretName: openiddict-certs
+      # 改动说明：Data Protection 密钥持久卷（hostPath，单副本；DirectoryOrCreate 自动建目录）
+      - name: dpkeys
+        hostPath:
+          path: /opt/openfindbearings/identity/dpkeys
+          type: DirectoryOrCreate
 
 ---
 apiVersion: v1

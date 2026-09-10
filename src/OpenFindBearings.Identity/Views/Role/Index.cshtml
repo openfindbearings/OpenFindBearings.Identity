@@ -1,0 +1,54 @@
+@model PaginatedResult<RoleDto>
+@{
+    ViewData["Title"] = "角色管理";
+}
+
+<h2>角色管理</h2>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="mb-3 d-flex justify-content-between">
+    <form method="get" class="d-flex gap-2">
+        <input type="text" name="search" value="@ViewBag.Search" class="form-control" placeholder="搜索角色名" />
+        <button type="submit" class="btn btn-outline-secondary">搜索</button>
+    </form>
+    <a asp-action="Create" class="btn btn-success">新建角色</a>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>名称</th>
+            <th>用户数</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var role in Model.Items)
+        {
+            <tr>
+                <td>@role.Name</td>
+                <td>@role.UserCount</td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@role.Id" class="btn btn-sm btn-outline-primary">编辑</a>
+                    <form asp-action="Delete" asp-route-id="@role.Id" method="post" class="d-inline" onsubmit="return confirm('确认删除角色 @role.Name？');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (!Model.Items.Any())
+{
+    <p class="text-muted">暂无角色</p>
+}

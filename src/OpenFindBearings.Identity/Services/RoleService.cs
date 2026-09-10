@@ -191,6 +191,51 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
+        public async Task<ServiceResult> UpdateAsync(Guid id, string newName, CancellationToken ct = default)
+        {
+            var role = await _roleManager.FindByIdAsync(id.ToString());
+            if (role == null)
+            {
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError { Code = "RoleNotFound", Description = "角色不存在" }
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError { Code = "RoleNameRequired", Description = "角色名称不能为空" }
+                });
+            }
+
+            if (role.Name == newName) return ServiceResult.Success();
+
+            if (await _roleManager.RoleExistsAsync(newName))
+            {
+                return ServiceResult.Failure(new[]
+                {
+                    new ServiceError { Code = "RoleAlreadyExists", Description = $"角色 '{newName}' 已存在" }
+                });
+            }
+
+            role.Name = newName;
+            var result = await _roleManager.UpdateAsync(role);
+            if (!result.Succeeded)
+            {
+                return ServiceResult.Failure(result.Errors.Select(e => new ServiceError
+                {
+                    Code = e.Code,
+                    Description = e.Description
+                }).ToArray());
+            }
+
+            await _auditLogRepo.LogRoleActionAsync(null, "System", "UpdateRole", role.Id.ToString(), null, true, ct);
+            return ServiceResult.Success();
+        }
+
+        /// <inheritdoc/>
         public async Task<int> GetUserCountAsync(string roleName, CancellationToken ct = default)
         {
             var users = await _userManager.GetUsersInRoleAsync(roleName);
