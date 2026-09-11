@@ -61,6 +61,14 @@
         <div class="form-text">勾选会写入 scp:* 权限；未勾选的原 scp 权限会被移除，端点权限不受影响。</div>
     </div>
 
+    @* 改动说明：Keycloak 无客户端级受众设置（aud 挂在 scope 上），此处按勾选 scope 实时推导
+       该客户端令牌的受众预览，消除"客户端没有受众设置"的困惑 *@
+    <div class="mb-3">
+        <label class="form-label">令牌受众预览（aud，由勾选作用域推导）</label>
+        <div id="audPreview" class="border rounded p-2 bg-light" style="min-height:38px"></div>
+        <div class="form-text">实际签发结果以 Scope 管理页的受众配置为准；预览仅随上方勾选联动刷新。</div>
+    </div>
+
     <button type="submit" class="btn btn-primary">保存</button>
     <a asp-action="Index" class="btn btn-outline-secondary">取消</a>
 </form>
@@ -89,4 +97,31 @@
 
 @section Scripts {
     @await Html.PartialAsync("_ValidationScriptsPartial")
+    <script>
+        (function () {
+            // 令牌受众预览：勾选作用域变化时，取各 scope 配置的受众并集实时渲染
+            var scopeAudiences = @Html.Raw((string)(ViewBag.ScopeAudiences ?? "{}"));
+            var box = document.getElementById('audPreview');
+            function render() {
+                var checkedScopes = Array.prototype.map.call(
+                    document.querySelectorAll('input[name="AllowedScopes"]:checked'),
+                    function (c) { return c.value; });
+                var auds = [];
+                checkedScopes.forEach(function (s) {
+                    (scopeAudiences[s] || []).forEach(function (a) {
+                        if (auds.indexOf(a) < 0) auds.push(a);
+                    });
+                });
+                if (auds.length === 0) {
+                    box.innerHTML = '<span class="text-muted">（所选作用域未配置受众，令牌 aud 仅含默认值）</span>';
+                    return;
+                }
+                box.innerHTML = auds.map(function (a) { return '<code class="me-2">' + a + '</code>'; }).join('');
+            }
+            document.querySelectorAll('input[name="AllowedScopes"]').forEach(function (c) {
+                c.addEventListener('change', render);
+            });
+            render();
+        })();
+    </script>
 }
