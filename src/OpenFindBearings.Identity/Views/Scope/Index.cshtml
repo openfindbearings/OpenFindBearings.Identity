@@ -33,6 +33,7 @@
                 <th>名称</th>
                 <th>显示名称</th>
                 <th>描述</th>
+                <th>受众（Audience）</th>
                 <th>操作</th>
             </tr>
         </thead>
@@ -43,6 +44,20 @@
                     <td><code>@item.Name</code></td>
                     <td>@item.DisplayName</td>
                     <td>@item.Description</td>
+                    @* 改动说明：列表直显受众（aud 来源一目了然，缺了受众的 scope 立即暴露） *@
+                    <td>
+                        @if (item.Resources == null || !item.Resources.Any())
+                        {
+                            <span class="text-muted">（无）</span>
+                        }
+                        else
+                        {
+                            @foreach (var r in item.Resources)
+                            {
+                                <code class="me-1">@r</code>
+                            }
+                        }
+                    </td>
                     <td>
                         <a asp-action="Edit" asp-route-name="@item.Name" class="btn btn-sm btn-outline-primary">编辑</a>
                         <form asp-action="Delete" asp-route-name="@item.Name" method="post" class="d-inline" onsubmit="return confirm('确定删除 Scope @item.Name？')">
@@ -54,7 +69,7 @@
             }
             @if (!Model.Items.Any())
             {
-                <tr><td colspan="4" class="text-center text-muted">暂无 Scope</td></tr>
+                <tr><td colspan="5" class="text-center text-muted">暂无 Scope</td></tr>
             }
         </tbody>
     </table>

@@ -51,9 +51,28 @@ namespace OpenFindBearings.Identity.Controllers
             return View(result);
         }
 
+        /// <summary>
+        /// 已知受众（资源标识符）目录：代码常量 + 全部既有 scope 已用资源的并集（+当前编辑项），
+        /// 供受众编辑器 datalist 建议；新增后台服务时在 ApiResourceConstants 加常量即可进入目录。
+        /// </summary>
+        private async Task<List<string>> GetKnownAudiencesAsync(IEnumerable<string>? extra = null)
+        {
+            var used = (await _scopeService.GetAllAsync())
+                .SelectMany(s => s.Resources ?? (IReadOnlyList<string>)Array.Empty<string>());
+            return new[] { ApiResourceConstants.BaseApi, ApiResourceConstants.SyncApi }
+                .Concat(used)
+                .Concat(extra ?? Enumerable.Empty<string>())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()
+                .OrderBy(s => s)
+                .ToList();
+        }
+
         public async Task<IActionResult> Create()
         {
             ViewBag.Tenants = await GetTenantsAsync();
+            // 改动说明：受众编辑器数据源（Keycloak Included Audience 范式）
+            ViewBag.AudienceKnown = await GetKnownAudiencesAsync();
             return View();
         }
 
@@ -67,9 +86,16 @@ namespace OpenFindBearings.Identity.Controllers
                 return View(request);
             }
 
-            // 改动说明：受众输入文本拆成列表交给 service（此前新建 UI 未暴露受众，Resources 恒为 null）
-            if (request.ResourcesText != null)
+            // 改动说明：受众编辑器以 hidden Resources 列表 + resourcesSubmitted 标记提交——
+            // 有标记则按提交值采纳（空列表=明确清空受众）；无标记的旧式调用回退 ResourcesText 拆分
+            if (Request.Form.ContainsKey("resourcesSubmitted"))
+            {
+                request.Resources = request.Resources ?? new List<string>();
+            }
+            else if (request.ResourcesText != null)
+            {
                 request.Resources = SplitResources(request.ResourcesText);
+            }
 
             var result = await _scopeService.CreateAsync(request, request.TenantId);
             if (!result.IsSuccess)
@@ -94,8 +120,10 @@ namespace OpenFindBearings.Identity.Controllers
                 return NotFound();
 
             // 改动说明：把 name 传给视图供 POST 回带（原表单漏带导致 name=null→Forbid→保存无反应）；
-            // 受众以每行一个文本呈现，编辑时可增删。
+            // 受众改由行式编辑器呈现（当前值 + 已知资源建议）
             ViewBag.Name = name;
+            ViewBag.AudienceCurrent = scope.Resources;
+            ViewBag.AudienceKnown = await GetKnownAudiencesAsync(scope.Resources);
             return View(new UpdateScopeDto
             {
                 DisplayName = scope.DisplayName,
@@ -118,9 +146,16 @@ namespace OpenFindBearings.Identity.Controllers
             if (!await _scopeService.IsScopeInTenantAsync(name, tenantId))
                 return Forbid();
 
-            // 受众：ResourcesText 非 null 表示本次要改受众，拆分成列表交给 service（空则清空）
-            if (request.ResourcesText != null)
+            // 受众：编辑器提交（有 resourcesSubmitted 标记）时按 hidden 列表整体替换（空=清空）；
+            // 无标记的旧式调用保留 null=不修改、ResourcesText 拆分的原语义
+            if (Request.Form.ContainsKey("resourcesSubmitted"))
+            {
+                request.Resources = request.Resources ?? new List<string>();
+            }
+            else if (request.ResourcesText != null)
+            {
                 request.Resources = SplitResources(request.ResourcesText);
+            }
 
             var result = await _scopeService.UpdateAsync(name, request);
             if (!result.IsSuccess)

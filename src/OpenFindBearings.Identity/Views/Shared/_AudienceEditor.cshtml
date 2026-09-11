@@ -1,0 +1,98 @@
+@*
+    受众（Audience）编辑器共享局部视图（Keycloak client scope "Included Audience" 范式）：
+    - 当前受众以行式列表呈现，每行可删除；输入框 + 添加按钮新增（datalist 提供已知资源建议）
+    - 提交形态：每个受众一个 hidden input（name="Resources"），外加 resourcesSubmitted 标记，
+      使"删光所有受众"能区分于"未提交受众"（null=不修改 语义仅对无标记的旧调用方保留）
+    使用：ViewData["AudienceCurrent"]（IEnumerable<string>?）、ViewData["AudienceKnown"]（IEnumerable<string>）
+*@
+@{
+    var current = (ViewData["AudienceCurrent"] as IEnumerable<string> ?? Enumerable.Empty<string>()).ToList();
+    var known = (ViewData["AudienceKnown"] as IEnumerable<string> ?? Enumerable.Empty<string>()).ToList();
+    var inputId = (ViewData["AudienceInputId"] as string) ?? "audienceInput";
+}
+<div class="mb-3" data-audience-editor>
+    <label class="form-label">受众 / 资源（Included Audience）</label>
+    <ul class="list-group mb-2" data-audience-list>
+        @foreach (var r in current)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center" data-audience-item="@r">
+                <code>@r</code>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-audience-remove>移除</button>
+            </li>
+        }
+    </ul>
+    <div class="input-group">
+        <input id="@inputId" class="form-control" list="audienceKnownList_@inputId" placeholder="输入资源标识符，如 openfindbearings-api" autocomplete="off" />
+        <button type="button" class="btn btn-outline-primary" data-audience-add>添加</button>
+    </div>
+    <datalist id="audienceKnownList_@inputId">
+        @foreach (var k in known)
+        {
+            <option value="@k"></option>
+        }
+    </datalist>
+    @* 已选受众以 hidden 域随表单提交；空列表时仅提交 resourcesSubmitted 标记 *@
+    <div data-audience-hidden>
+        @foreach (var r in current)
+        {
+            <input type="hidden" name="Resources" value="@r" />
+        }
+    </div>
+    <input type="hidden" name="resourcesSubmitted" value="1" />
+    <div class="form-text">
+        请求该 scope 签发的 access token 的 aud 会包含以上资源标识符；已知资源由代码常量与既有 scope 汇总提供，也可输入自定义值。
+    </div>
+</div>
+
+<script>
+    (function () {
+        // 受众编辑器行为：添加（去重、去空白）、移除，同步维护 hidden 域集合
+        var root = document.currentScript.previousElementSibling;
+        while (root && !root.hasAttribute('data-audience-editor')) root = root.previousElementSibling;
+        if (!root) return;
+        var list = root.querySelector('[data-audience-list]');
+        var hiddenBox = root.querySelector('[data-audience-hidden]');
+        var input = root.querySelector('input.form-control');
+        var addBtn = root.querySelector('[data-audience-add]');
+
+        function currentValues() {
+            return Array.prototype.map.call(
+                list.querySelectorAll('[data-audience-item]'),
+                function (li) { return li.getAttribute('data-audience-item'); });
+        }
+
+        function syncHidden() {
+            hiddenBox.innerHTML = '';
+            currentValues().forEach(function (v) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'Resources'; i.value = v;
+                hiddenBox.appendChild(i);
+            });
+        }
+
+        function addItem(v) {
+            v = (v || '').trim();
+            if (!v) return;
+            if (currentValues().indexOf(v) >= 0) { input.value = ''; return; }
+            var li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.setAttribute('data-audience-item', v);
+            var code = document.createElement('code'); code.textContent = v;
+            var btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'btn btn-sm btn-outline-danger'; btn.textContent = '移除';
+            li.appendChild(code); li.appendChild(btn);
+            list.appendChild(li);
+            input.value = '';
+            syncHidden();
+        }
+
+        addBtn.addEventListener('click', function () { addItem(input.value); });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addItem(input.value); } });
+        list.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-audience-remove')) {
+                var li = e.target.closest('[data-audience-item]');
+                if (li) { li.parentNode.removeChild(li); syncHidden(); }
+            }
+        });
+    })();
+</script>
