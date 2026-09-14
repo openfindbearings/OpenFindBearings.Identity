@@ -27,7 +27,7 @@ spec:
       # 以获得 chown 权限；chown 行为与镜像版本无关，tag 漂移无影响。
       initContainers:
       - name: dpkeys-init
-        image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.0
+        image: ghcr.io/openfindbearings/openfindbearings-identity:latest
         command: ["sh", "-c", "chown -R 1654:1654 /app/dpkeys && chmod 700 /app/dpkeys"]
         securityContext:
           runAsUser: 0
@@ -36,7 +36,7 @@ spec:
           mountPath: /app/dpkeys
       containers:
       - name: openfindbearings-identity
-        image: ghcr.io/openfindbearings/openfindbearings-identity:v1.0.0
+        image: ghcr.io/openfindbearings/openfindbearings-identity:latest
         ports:
         - containerPort: 8080
 
