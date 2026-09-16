@@ -33,8 +33,10 @@ namespace OpenFindBearings.Identity.Models.Requests
 
         /// <summary>
         /// 头像 URL
+        /// 改动说明：[Url] 改相对/绝对双允许正则——头像现按"相对媒体键入库、前端拼媒体源"的主流做法
+        /// （如 /uploads/avatars/xxx.jpg），绝对 http(s) 仍兼容；避免把 host 焊进库导致换域名/切对象存储全炸
         /// </summary>
-        [Url(ErrorMessage = "头像URL格式不正确")]
+        [RegularExpression(@"^(https?://|/).+", ErrorMessage = "头像地址格式不正确")]
         [StringLength(500, ErrorMessage = "URL不能超过500个字符")]
         public string? PictureUrl { get; set; }
 
