@@ -1,7 +1,7 @@
 # OpenFindBearings.Identity 认证中心设计文档
 
 **版本：** v2.10.0
-**日期：** 2026-09-01
+**日期：** 2026-09-21
 **状态：** 与代码同步
 
 ---
@@ -23,7 +23,7 @@
 | v2.7.0 | 2026-08-20 | 用户管理支持彻底删除：新增 DELETE /api/account/admin/users/{id}/permanent |
 | v2.8.0 | 2026-08-25 | 修复 RP-Initiated Logout ID2052 错误：admin_client 和 web-client 补充 `ept:end_session` 端点权限 |
 | v2.9.0 | 2026-08-25 | 设备绑定（device_id）：登录时将 device_id 写入 JWT claim，刷新令牌时校验 device_id 一致性，不匹配则拒绝刷新。Admin 登录生成 device_id cookie + authorize URL 参数 |
-| v2.10.0 | 2026-09-01 | 客户端/Scope 命名统一：maui-client → mobile-client，api:maui → api:mobile，DisplayName 改为「移动端 Taro」；admin_client 补充 api:mobile scope 权限 |
+| v2.10.0 | 2026-09-21 | 新增 `UsersApiController`（`api/users`，服务间查询面）：`GET by-phone` / `GET by-email` 按联系方式查注册用户（禁用用户按 404），返回 OIDC 形状 UserDto。动因：业务 API 的 IdentityService 一直按 `/api/users/by-phone` 调用但端点从未实现（UsersController 是 MVC 管理面板，无 REST 路由），恒 404 导致商户"添加成员"永远静默走邀请分支（邀请又无消费入口）。认证方式：AllowAnonymous + 集群内网隔离（不经 Ingress 暴露），与 SmsController 同款先例；不触碰 OpenIddict 注册/OAuth 端点/租户隔离逻辑。 |
 
 ---
 
@@ -87,7 +87,7 @@ Identity 后端**同时支持**两种方式标识租户，**两者均为空时�
 | 客户端 | ClientId | 所属租户 |
 |--------|----------|----------|
 | 同步服务客户端 | sync-client | OpenFindBearings |
-| 移动端 Taro | mobile-client | OpenFindBearings |
+| MAUI 客户端 | maui-client | OpenFindBearings |
 | Web 客户端 | web-client | OpenFindBearings |
 | Admin 后台管理 | admin_client | OpenFindBearings |
 
@@ -95,7 +95,7 @@ Identity 后端**同时支持**两种方式标识租户，**两者均为空时�
 |-------|------|------|----------|
 | Sync API | api:sync | openfindbearings-api | OpenFindBearings |
 | Admin API | api:admin | openfindbearings-api, openfindbearings-sync | OpenFindBearings |
-| 移动端 API | api:mobile | openfindbearings-api | OpenFindBearings |
+| MAUI API | api:maui | openfindbearings-api | OpenFindBearings |
 | Web API | api:web | openfindbearings-api | OpenFindBearings |
 
 > **资源模型说明**：每个后台微服务拥有独立资源标识（openfindbearings-api、openfindbearings-sync）。`api:admin` 关联全部服务资源，Admin 的 token 携带多个 aud，可统一访问所有后台微服务；`api:sync` 仅供 sync-client 调 API 使用，保持单一资源。未来新增后台服务时，在 `ApiResourceConstants` 新增常量并把资源追加到 `api:admin` 的资源列表即可。
@@ -300,8 +300,8 @@ src/OpenFindBearings.Identity/
 2. **Roles**：SuperAdmin, Admin, User, TestUser（idempotent）
 3. **Users**：7 个用户（2 admin + 5 测试用户，含 lockeduser）（idempotent，按 TenantId + UserName 唯一性）
 4. **UserRoles**：管理员配 SuperAdmin+Admin，其余配 User（idempotent）
-5. **Clients**：sync-client / mobile-client / web-client / admin_client（创建后绑定到 OpenFindBearings 租户。mobile-client 的 AllowedGrantTypes 新增 `sms`。admin_client 的 RedirectUris 包含 `https://admin.515813.xyz/callback` 和 `https://admin.515813.xyz/signout-callback-oidc`。admin_client 和 web-client 必须配置 `ept:end_session` 端点权限，否则 RP-Initiated Logout 会返回 ID2052 错误）
-6. **Scopes**：api:sync / api:admin / api:mobile / api:web（创建后绑定到 OpenFindBearings 租户。api:admin 关联双资源 [openfindbearings-api, openfindbearings-sync]，其余关联 openfindbearings-api）
+5. **Clients**：sync-client / maui-client / web-client / admin_client（创建后绑定到 OpenFindBearings 租户。maui-client 的 AllowedGrantTypes 新增 `sms`。admin_client 的 RedirectUris 包含 `https://admin.515813.xyz/callback` 和 `https://admin.515813.xyz/signout-callback-oidc`。admin_client 和 web-client 必须配置 `ept:end_session` 端点权限，否则 RP-Initiated Logout 会返回 ID2052 错误）
+6. **Scopes**：api:sync / api:admin / api:maui / api:web（创建后绑定到 OpenFindBearings 租户。api:admin 关联双资源 [openfindbearings-api, openfindbearings-sync]，其余关联 openfindbearings-api）
 
 **常量说明：** `SmsCodeTypeConstants` 新增 `Register` 常量，用于区分注册场景的短信验证码类型。
 
