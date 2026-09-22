@@ -18,10 +18,13 @@ namespace OpenFindBearings.Identity.Controllers
     public class UsersApiController : Controller
     {
         private readonly IUserService _userService;
+        // 改动说明（v2.16.0）：注销链需要吊销令牌能力，注入既有 TokenRevocationService
+        private readonly ITokenRevocationService _tokenRevocation;
 
-        public UsersApiController(IUserService userService)
+        public UsersApiController(IUserService userService, ITokenRevocationService tokenRevocation)
         {
             _userService = userService;
+            _tokenRevocation = tokenRevocation;
         }
 
         /// <summary>
@@ -51,5 +54,51 @@ namespace OpenFindBearings.Identity.Controllers
 
             return Ok(user);
         }
+
+        /// <summary>
+        /// 注销账户（v2.16.0，供 API 用户自助注销链调用）：软删除（禁用+永久锁定+DeletedAt）
+        /// 并吊销全部刷新令牌（全设备即时下线）。按 subject（AuthUserId）定位。
+        /// </summary>
+        [HttpPost("deactivate")]
+        public async Task<IActionResult> Deactivate([FromBody] DeactivateUserRequest request, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(request.Subject))
+                return BadRequest(new { message = "subject 必填" });
+
+            if (!Guid.TryParse(request.Subject, out var userId))
+                return BadRequest(new { message = "subject 非法" });
+
+            var user = await _userService.GetByIdAsync(userId, ct);
+            if (user == null) return NotFound(new { message = "用户不存在" });
+
+            var result = await _userService.DeleteAsync(userId, ct);
+            if (!result.IsSuccess)
+                return BadRequest(new { message = "注销失败" });
+
+            // 吊销全部刷新令牌：各设备下次刷新即失效，无法续期登录态
+            await _tokenRevocation.RevokeAllRefreshTokensAsync(user.Id.ToString(), ct);
+            return Ok(new { message = "账户已注销" });
+        }
+
+        /// <summary>
+        /// 匿名化（v2.16.0，冷静期满由 API 定时任务调用）：清除个人身份信息
+        /// （手机号/邮箱/用户名改匿名占位），配合软删除完成个保法删除义务。
+        /// </summary>
+        [HttpPost("anonymize")]
+        public async Task<IActionResult> Anonymize([FromBody] DeactivateUserRequest request, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(request.Subject) || !Guid.TryParse(request.Subject, out var userId))
+                return BadRequest(new { message = "subject 必填且为 GUID" });
+
+            var result = await _userService.AnonymizeAsync(userId, ct);
+            if (!result.IsSuccess) return NotFound(new { message = "用户不存在" });
+
+            return Ok(new { message = "已匿名化" });
+        }
     }
+
+    /// <summary>
+    /// 按 subject 定位用户的注销/匿名化请求体
+    /// </summary>
+    public record DeactivateUserRequest(string Subject);
 }

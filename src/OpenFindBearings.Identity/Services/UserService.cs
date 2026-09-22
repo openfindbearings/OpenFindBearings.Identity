@@ -304,6 +304,33 @@ namespace OpenFindBearings.Identity.Services
             return ServiceResult.Success();
         }
 
+        /// <summary>
+        /// 匿名化用户（v2.16.0）：冷静期满后清除个人身份信息——
+        /// 手机号/邮箱置空、用户名改匿名占位、刷新 SecurityStamp 使残留会话失效。
+        /// 保留软删除状态与外键关联行（订单类数据由业务库侧另行处理）。
+        /// </summary>
+        public async Task<ServiceResult> AnonymizeAsync(Guid id, CancellationToken ct = default)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+            {
+                return ServiceResult.Failure(new ServiceError { Code = "UserNotFound", Description = "用户不存在" });
+            }
+
+            user.PhoneNumber = null;
+            user.PhoneNumberConfirmed = false;
+            user.Email = null;
+            user.EmailConfirmed = false;
+            // 用户名改匿名占位（SetUserNameAsync 同步维护 NormalizedUserName）
+            var nameResult = await _userManager.SetUserNameAsync(user, $"deleted-{id:N}"[..24]);
+            if (!nameResult.Succeeded)
+            {
+                return ServiceResult.Failure(new ServiceError { Code = "AnonymizeFailed", Description = "匿名化用户名失败" });
+            }
+            await _userManager.UpdateSecurityStampAsync(user);
+            return ServiceResult.Success();
+        }
+
         /// <inheritdoc/>
         public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
         {

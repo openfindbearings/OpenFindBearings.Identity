@@ -161,5 +161,10 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         /// 记录登录失败
         /// </summary>
         Task RecordLoginFailureAsync(Guid userId, CancellationToken ct = default);
+
+        /// <summary>
+        /// 匿名化用户（v2.16.0）：清除手机号/邮箱/用户名等 PII，冷静期满数据删除义务用
+        /// </summary>
+        Task<ServiceResult> AnonymizeAsync(Guid id, CancellationToken ct = default);
     }
 }
