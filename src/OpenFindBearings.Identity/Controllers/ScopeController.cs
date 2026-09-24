@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using OpenFindBearings.Identity.Constants;
@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace OpenFindBearings.Identity.Controllers
 {
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize(Policy = "IdentitySystemAdmin")]
     public class ScopeController : Controller
     {
         private readonly IScopeService _scopeService;
