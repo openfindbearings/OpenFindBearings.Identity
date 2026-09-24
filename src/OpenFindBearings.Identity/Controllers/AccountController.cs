@@ -281,14 +281,16 @@ namespace OpenFindBearings.Identity.Controllers
             if (request.PageSize < 1) request.PageSize = 20;
             if (request.PageSize > 100) request.PageSize = 100;
 
-            // 未传 tenantId 时使用当前管理员 JWT 中的 tenant_id claim
-            var effectiveTenantId = request.TenantId;
-            if (!effectiveTenantId.HasValue)
-            {
-                var tidClaim = User.FindFirst("tenant_id")?.Value;
-                if (!string.IsNullOrEmpty(tidClaim) && Guid.TryParse(tidClaim, out var tid))
-                    effectiveTenantId = tid;
-            }
+            // 改动说明（v2.17.0 租户作用域收紧）：原实现允许调用者用 request.TenantId 越权列举
+            //   任意租户用户（ofb 管理员传 system 租户 ID 即可跨租户窥探）。现规则：
+            //   system 租户管理员可传 tenantId 过滤或留空看全部；非 system 调用者强制锁定本租户，
+            //   请求参数一律忽略
+            var callerTenantClaim = User.FindFirst("tenant_id")?.Value;
+            Guid? callerTenantId = null;
+            if (!string.IsNullOrEmpty(callerTenantClaim) && Guid.TryParse(callerTenantClaim, out var ctid))
+                callerTenantId = ctid;
+            var isSystemAdmin = callerTenantId == TenantConstants.SystemTenantId;
+            var effectiveTenantId = isSystemAdmin ? request.TenantId : callerTenantId;
 
             var result = await _userService.GetPagedAsync(
                 request.Page,

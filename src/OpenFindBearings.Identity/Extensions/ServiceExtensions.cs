@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Data.Repositories;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
@@ -44,6 +45,18 @@ namespace OpenFindBearings.Identity.Extensions
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
+
+            // 改动说明（v2.17.0）：Cookie Principal 写入 tenant_id 声明，供管理面租户守卫 Policy 离线校验
+            services.AddScoped<IUserClaimsPrincipalFactory<OidcUser>, ApplicationClaimsPrincipalFactory>();
+
+            // 改动说明（v2.17.0）：身份基础设施管理面（用户/角色/租户/Scope/客户端）限 system 租户管理员——
+            //   ofb 业务管理员经业务 Admin 后台代理管理本租户用户，不得跨入身份基础设施管理面
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("IdentitySystemAdmin", policy => policy
+                    .RequireRole("SuperAdmin", "Admin")
+                    .RequireClaim("tenant_id", TenantConstants.SystemTenantId.ToString()));
+            });
 
             return services;
         }

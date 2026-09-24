@@ -5,7 +5,7 @@ using OpenFindBearings.Identity.Services.Interfaces;
 
 namespace OpenFindBearings.Identity.Controllers
 {
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize(Policy = "IdentitySystemAdmin")]
     public class UsersController : Controller
     {
         private readonly IUserService _userService;

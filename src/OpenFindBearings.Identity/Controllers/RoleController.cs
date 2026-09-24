@@ -8,7 +8,7 @@ namespace OpenFindBearings.Identity.Controllers
     /// 角色管理控制器（自管理后台）。改动说明：补回完整 Role CRUD 界面（此前仅有列表/创建/删除）。
     /// 统一走 IRoleService，控制器不直连 RoleManager/DbContext。
     /// </summary>
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize(Policy = "IdentitySystemAdmin")]
     public class RoleController : Controller
     {
         private readonly IRoleService _roleService;
