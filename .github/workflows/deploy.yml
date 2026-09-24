@@ -146,24 +146,29 @@ jobs:
           echo "新镜像: $IMAGE"
 
           echo "正在更新 deployment 镜像..."
+          # 改动说明（v1.0.0-rc.5 事故复盘）：① kubectl set image 只更新指定容器，
+          #   init 容器 dpkeys-init 复用同款镜像但 tag 会永久漂移在旧值——上次清理
+          #   Releases 删掉旧 tag 后新 pod 永远卡 Init:ErrImagePull(not found)，
+          #   故 init 容器固定 :latest（仅 chown 密钥目录，与版本无关，latest 恒在）
           kubectl set image deployment/$DEPLOYMENT \
             $CONTAINER=$IMAGE \
+            dpkeys-init=${IMAGE%:*}:latest \
             -n $NAMESPACE \
             --record
 
-          echo "等待 rollout 完成（超时时间: 10分钟）..."
+          # 改动说明：超时 10m→20m（GHCR 跨境慢拉窗口实测可超 10 分钟）；
+          #   失败不再 rollout undo——undo 目标是"上一代 RS"，恰为钉死已删 tag 的坏 RS，
+          #   回滚反而把 deployment 拖进拉取死循环（本次 7 连败的直接放大器）。
+          #   不 undo 时旧 pod 持续服务（滚动更新天然保证 ready 前不杀旧），
+          #   desired 状态留在新版本，kubelet 自动重试拉取直至成功（自愈）
+          echo "等待 rollout 完成（超时时间: 20分钟）..."
           if ! kubectl rollout status deployment/$DEPLOYMENT \
             -n $NAMESPACE \
-            --timeout=10m; then
+            --timeout=20m; then
             echo ""
-            echo "部署失败，正在回滚..."
-            kubectl rollout undo deployment/$DEPLOYMENT \
-              -n $NAMESPACE
-            echo "回滚完成"
-            kubectl get deployment $DEPLOYMENT \
-              -n $NAMESPACE \
-              -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$CONTAINER\")].image}"
-            echo ""
+            echo "部署未在时限内就绪（大概率 GHCR 拉取慢或应用启动异常），不回滚，旧 pod 继续服务"
+            kubectl get pod -n $NAMESPACE -o wide | grep $DEPLOYMENT
+            kubectl get events -n $NAMESPACE --sort-by=.lastTimestamp | grep -i $DEPLOYMENT | tail -10
             exit 1
           fi
 
