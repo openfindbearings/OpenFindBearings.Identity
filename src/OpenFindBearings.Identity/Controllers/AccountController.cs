@@ -26,15 +26,20 @@ namespace OpenFindBearings.Identity.Controllers
         private readonly IUserService _userService;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AccountController> _logger;
+        // 改动说明（v2.19.0）：初始密码配置注入（Security:InitialUserPassword），
+        // 后台建号空密码兜底 + reset-to-default 端点共用
+        private readonly IConfiguration _configuration;
 
         public AccountController(
             IUserService userService,
             ApplicationDbContext context,
-            ILogger<AccountController> logger)
+            ILogger<AccountController> logger,
+            IConfiguration configuration)
         {
             _userService = userService;
             _context = context;
             _logger = logger;
+            _configuration = configuration;
         }
 
         #region ========== 公开接口（无需认证）==========
@@ -349,12 +354,22 @@ namespace OpenFindBearings.Identity.Controllers
             if (!string.IsNullOrEmpty(adminTenantIdClaim) && Guid.TryParse(adminTenantIdClaim, out var atid))
                 adminTenantId = atid;
 
+            // 改动说明（v2.19.0）：密码为空 → 用系统初始密码兜底，账号首登被强制改密
+            // （LoginController 守卫），后台建号无需人工输密；显式指定密码则照常
+            var effectivePassword = string.IsNullOrWhiteSpace(request.Password)
+                ? _configuration["Security:InitialUserPassword"] ?? ""
+                : request.Password;
+            if (string.IsNullOrEmpty(effectivePassword))
+            {
+                return ApiResponseHelper.BadRequest<UserResponse>(this, "未提供密码且系统初始密码未配置");
+            }
+
             var dto = new CreateUserDto
             {
                 UserName = request.UserName,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
-                Password = request.Password,
+                Password = effectivePassword,
                 Name = request.Name,
                 GivenName = request.GivenName,
                 FamilyName = request.FamilyName,
@@ -608,6 +623,38 @@ namespace OpenFindBearings.Identity.Controllers
 
             _logger.LogInformation("管理员重置用户密码: UserId={UserId}, Operator={Operator}", id, GetCurrentUserName());
             return ApiResponseHelper.Success(this, result.Data!, "Password reset successfully");
+        }
+
+        /// <summary>
+        /// 重置为系统初始密码（管理员，v2.19.0）
+        /// 密码值只在 Identity 配置（Security:InitialUserPassword）单一事实源，
+        /// 调用方不传密码杜绝"管理员各设各的记乱"；响应回显所用初始密码一次供转告本人，
+        /// 该账号下次登录会被强制改密（LoginController 守卫）
+        /// </summary>
+        [HttpPost("admin/users/{id}/reset-to-default")]
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        public async Task<ActionResult<ApiResponse<string>>> AdminResetToInitialPassword(Guid id)
+        {
+            var tenantUser = await GetTenantUserAsync(id);
+            if (tenantUser == null)
+            {
+                return ApiResponseHelper.NotFound<string>(this, "User not found");
+            }
+
+            var initialPassword = _configuration["Security:InitialUserPassword"];
+            if (string.IsNullOrEmpty(initialPassword))
+            {
+                return ApiResponseHelper.BadRequest<string>(this, "系统初始密码未配置（Security:InitialUserPassword）");
+            }
+
+            var result = await _userService.ResetPasswordAsync(id, initialPassword);
+            if (!result.IsSuccess)
+            {
+                return ApiResponseHelper.BadRequest<string>(this, "Reset failed", result.GetErrorDictionary());
+            }
+
+            _logger.LogInformation("管理员重置用户为初始密码: UserId={UserId}, Operator={Operator}", id, GetCurrentUserName());
+            return ApiResponseHelper.Success(this, initialPassword, "已重置为初始密码");
         }
 
         /// <summary>
