@@ -1,12 +1,17 @@
-﻿using OpenFindBearings.Identity.Data;
+using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Middleware;
+using OpenFindBearings.Identity.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 改动说明（v2.18.0 时间治理）：业务日界偏移（今日短信配额/今日审计计数切日），
+//   与 API 项目 SystemConfig Business.TimeZoneOffsetHours 同口径，默认 +8 北京；两侧配置需人工保持一致
+BusinessClock.Configure(builder.Configuration.GetValue<int>("Business:TimeZoneOffsetHours", 8));
 
 // 1. Forwarded Headers
 builder.Services.ConfigureForwardedHeaders(builder.Environment.IsDevelopment());

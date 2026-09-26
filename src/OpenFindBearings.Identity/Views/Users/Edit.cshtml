@@ -23,8 +23,8 @@
     <div class="col-md-6"><label class="form-label">角色（只读）</label><input class="form-control" value="@string.Join("、", userRoles)" readonly disabled /></div>
 </div>
 <div class="row mb-3">
-    <div class="col-md-4"><label class="form-label">创建时间</label><input class="form-control" value="@user.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")" readonly disabled /></div>
-    <div class="col-md-4"><label class="form-label">最后登录</label><input class="form-control" value="@(user.LastLoginAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "从未登录")" readonly disabled /></div>
+<div class="col-md-4"><label class="form-label">创建时间</label>@* v2.18.0 时间治理：input 也走 data-utc，全局 JS 填充 value *@<input class="form-control" data-utc="@user.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ssZ")" value="@user.CreatedAt.ToString("yyyy-MM-dd HH:mm")" readonly disabled /></div>
+<div class="col-md-4"><label class="form-label">最后登录</label><input class="form-control" @Html.Raw(user.LastLoginAt.HasValue ? "data-utc=\"" + user.LastLoginAt.Value.ToString("yyyy-MM-ddTHH:mm:ssZ") + "\"" : "") value="@(user.LastLoginAt?.ToString("yyyy-MM-dd HH:mm") ?? "从未登录")" readonly disabled /></div>
 </div>
 
 @* 可编辑资料 *@

@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Services;
 
 namespace OpenFindBearings.Identity.Data.Repositories
 {
@@ -164,7 +165,9 @@ namespace OpenFindBearings.Identity.Data.Repositories
         /// </summary>
         public async Task<int> GetTodayCountAsync(CancellationToken cancellationToken = default)
         {
-            var today = DateTimeOffset.UtcNow.Date;
+            // 改动说明（v2.18.0 时间治理）：今日日志计数从 UTC 零点改为业务日界（默认北京），
+        // 与 API/Sync 侧统计口径统一
+        var today = BusinessClock.TodayUtc;
             var tomorrow = today.AddDays(1);
 
             return await _context.AuditLogs

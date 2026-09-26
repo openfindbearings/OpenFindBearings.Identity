@@ -1,7 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Data.Repositories.Interfaces;
 using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Models.Entities;
+using OpenFindBearings.Identity.Services;
 
 namespace OpenFindBearings.Identity.Data.Repositories
 {
@@ -74,7 +75,9 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task<int> GetTodaySendCountAsync(string phoneNumber, CancellationToken cancellationToken = default)
         {
-            var today = DateTimeOffset.UtcNow.Date;
+            // 改动说明（v2.18.0 时间治理）：日发送配额的"今日"从 UTC 零点改为业务日界（默认北京），
+        // 修复中国用户凌晨 0-8 点请求消耗"前一天"额度、重置点感知错位的问题
+        var today = BusinessClock.TodayUtc;
             var tomorrow = today.AddDays(1);
 
             return await _context.SmsCodes

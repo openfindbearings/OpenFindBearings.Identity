@@ -46,7 +46,8 @@
                     <td>@item.Description</td>
                     <td>@item.UserCount</td>
                     <td><span class="badge @(item.IsEnabled ? "bg-success" : "bg-secondary")">@(item.IsEnabled ? "启用" : "禁用")</span></td>
-                    <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                    @* v2.18.0 时间治理：服务端 ToLocalTime 改 data-utc + 全局 JS 按浏览器时区渲染（UTC 容器下原写法恒显 UTC） *@
+<td><span data-utc="@item.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ssZ")">@item.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span></td>
                     <td>
                         <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">编辑</a>
                         <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('确定删除租户 @item.Name？')">
