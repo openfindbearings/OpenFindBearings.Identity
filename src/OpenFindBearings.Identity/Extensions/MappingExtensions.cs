@@ -1,4 +1,4 @@
-﻿using OpenFindBearings.Identity.Helpers;
+using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Models.DTOs.AuditLog;
 using OpenFindBearings.Identity.Models.DTOs.SystemConfig;
 using OpenFindBearings.Identity.Models.DTOs.User;

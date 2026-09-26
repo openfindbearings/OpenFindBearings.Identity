@@ -1,4 +1,4 @@
-﻿namespace OpenFindBearings.Identity.Models.Responses
+namespace OpenFindBearings.Identity.Models.Responses
 {
     /// <summary>
     /// 用户响应（API 返回）
@@ -99,6 +99,8 @@
         /// 是否活跃（未被软删除）
         /// </summary>
         public bool IsActive { get; set; }
+    // 改动说明（v2.19.1）：临时锁定态透出（Admin 用户页"已锁定"筛选+解锁按钮消费）
+    public bool IsLockedOut { get; set; }
 
         /// <summary>
         /// 最后登录时间
