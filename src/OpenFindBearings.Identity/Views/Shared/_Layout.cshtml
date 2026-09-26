@@ -75,5 +75,29 @@
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+    @* 改动说明（v2.18.0 时间治理）：全局 UTC→本地时间转换器（与 Admin 同款模式）——
+        服务端 ToLocalTime 在 UTC 容器里恒等于没转且违反展示层规范，改为 Razor 输出
+        data-utc 原始 ISO 串、浏览器 Intl API 按设备时区渲染；比 Admin 版多支持 input value 填充 *@
+    <script>
+        (function () {
+            var _fmt = new Intl.DateTimeFormat("zh-CN", {
+                year: "numeric", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", hour12: false
+            });
+            function fmtUtc(s) {
+                if (!s) return null;
+                if (!/Z$|[+-]\d{2}:\d{2}$/.test(s)) s += "Z";
+                return _fmt.format(new Date(s));
+            }
+            document.addEventListener("DOMContentLoaded", function () {
+                document.querySelectorAll("[data-utc]").forEach(function (el) {
+                    var r = fmtUtc(el.getAttribute("data-utc"));
+                    if (!r) return;
+                    if (el.tagName === "INPUT") el.value = r;
+                    else el.textContent = r;
+                });
+            });
+        })();
+    </script>
 </body>
 </html>
