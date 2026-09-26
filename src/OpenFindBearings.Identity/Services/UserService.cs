@@ -80,7 +80,9 @@ namespace OpenFindBearings.Identity.Services
                 {
                     UserStatusFilter.Enabled => query.Where(u => u.IsEnabled && (!u.LockoutEnabled || !u.LockoutEnd.HasValue || u.LockoutEnd < DateTimeOffset.UtcNow)),
                     UserStatusFilter.Disabled => query.Where(u => !u.IsEnabled),
-                    UserStatusFilter.Locked => query.Where(u => u.LockoutEnabled && u.LockoutEnd.HasValue && u.LockoutEnd > DateTimeOffset.UtcNow),
+                    // 改动说明（v2.19.1）：排除已禁用用户——禁用流程写 LockoutEnd=MaxValue（OidcUser.Disable），
+                    // 原条件把"已禁用"全捞进"已锁定"视图（两筛选语义重叠）；锁定应仅指启用中因输错密码被临时锁
+                    UserStatusFilter.Locked => query.Where(u => u.IsEnabled && u.LockoutEnabled && u.LockoutEnd.HasValue && u.LockoutEnd > DateTimeOffset.UtcNow),
                     // 改动说明（v2.19.0）：已删除态单列筛选——黑名单（禁用）与已删是两种处置阶段，
                     // Admin 用户页状态下拉需要分别枚举（deleted 恒含软删行，不受 includeDeleted 影响）
                     UserStatusFilter.Deleted => query.Where(u => !u.IsActive),

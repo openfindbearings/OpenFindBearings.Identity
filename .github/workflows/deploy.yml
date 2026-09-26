@@ -146,13 +146,11 @@ jobs:
           echo "新镜像: $IMAGE"
 
           echo "正在更新 deployment 镜像..."
-          # 改动说明（v1.0.0-rc.5 事故复盘）：① kubectl set image 只更新指定容器，
-          #   init 容器 dpkeys-init 复用同款镜像但 tag 会永久漂移在旧值——上次清理
-          #   Releases 删掉旧 tag 后新 pod 永远卡 Init:ErrImagePull(not found)，
-          #   故 init 容器固定 :latest（仅 chown 密钥目录，与版本无关，latest 恒在）
+          # 改动说明（rc.9）：init 容器已改钉 busybox（deploy.yml 注释有因），与本发布镜像
+          #   彻底解耦，CI 不再 set image dpkeys-init——历史上 init 复用主镜像导致每次发布
+          #   全量重拉 latest（PodInitializing 卡 6-12 分钟），且 tag 被清理删除会 Init:ErrImagePull
           kubectl set image deployment/$DEPLOYMENT \
             $CONTAINER=$IMAGE \
-            dpkeys-init=${IMAGE%:*}:latest \
             -n $NAMESPACE \
             --record
 

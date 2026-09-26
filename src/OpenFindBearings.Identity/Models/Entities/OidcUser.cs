@@ -495,10 +495,12 @@ namespace OpenFindBearings.Identity.Models.Entities
 
         /// <summary>
         /// 检查账户是否被临时锁定（输错密码导致）
+        /// 改动说明（v2.19.1）：限定启用中——禁用流程写 LockoutEnd=MaxValue 属永久锁非临时锁，
+        /// 不加 IsEnabled 会让已禁用用户被误判锁定（Admin 解锁按钮/徽章错位）
         /// </summary>
         public bool IsTemporarilyLocked()
         {
-            return LockoutEnabled && LockoutEnd.HasValue && LockoutEnd > DateTimeOffset.UtcNow;
+            return IsEnabled && LockoutEnabled && LockoutEnd.HasValue && LockoutEnd > DateTimeOffset.UtcNow;
         }
 
         /// <summary>
