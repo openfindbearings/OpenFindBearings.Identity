@@ -23,6 +23,11 @@
         /// <summary>
         /// 已锁定
         /// </summary>
-        Locked = 3
+        Locked = 3,
+
+        /// <summary>
+        /// 已删除（软删待恢复态，v2.19.0：Admin 用户页黑名单/已删筛选需要）
+        /// </summary>
+        Deleted = 4
     }
 }
