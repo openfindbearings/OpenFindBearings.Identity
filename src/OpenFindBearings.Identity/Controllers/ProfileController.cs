@@ -30,12 +30,14 @@ namespace OpenFindBearings.Identity.Controllers;
 
     /// <summary>
     /// 修改密码页面
+    /// 改动说明（v2.19.0）：mustChange=1 时为"初始密码强制改密"模式，页面显示不可跳过的警示条
     /// </summary>
     [HttpGet("~/profile/change-password")]
-    public IActionResult ChangePassword(string returnUrl = "/", string? realm = null)
+    public IActionResult ChangePassword(string returnUrl = "/", string? realm = null, int mustChange = 0)
     {
         ViewBag.ReturnUrl = returnUrl;
         ViewBag.Realm = realm;
+        ViewBag.MustChange = mustChange == 1;
         return View();
     }
 
@@ -82,9 +84,13 @@ namespace OpenFindBearings.Identity.Controllers;
 
         await _signInManager.SignOutAsync();
 
+        // 改动说明（v2.19.0）：强制改密模式下改完必须重新登录，回跳登录页时保留原 returnUrl
+        // （多为 OIDC authorize 绝对地址，过不了下面的本地检查会被丢弃），
+        // 保证"登录→强制改密→重新登录→回到原目标"链路不断
         var redirectUrl = returnUrl;
         if (!Url.IsLocalUrl(redirectUrl) && !IsTrustedRedirect(redirectUrl))
-            redirectUrl = $"/Account/Login?password_changed=1";
+            redirectUrl = "/Account/Login?password_changed=1"
+                + (string.IsNullOrEmpty(returnUrl) || returnUrl == "/" ? "" : $"&returnUrl={Uri.EscapeDataString(returnUrl)}");
         return Redirect(redirectUrl);
     }
 

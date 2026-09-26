@@ -128,12 +128,30 @@ namespace OpenFindBearings.Identity.Controllers
                         if (user != null && user.TenantId != tenantInfo.TenantId.Value)
                         {
                             // 租户不匹配：跳转登录页，用户重新登录时自然覆盖旧 cookie
-                            _logger.LogInformation("授权请求: 当前用户租户 {UserTenant} 与请求租户 {ReqTenant} 不匹配，跳转登录页",
+                            _logger.LogInformation("授权请求: 当前用户租户 {UserTenant} 与请求租户 {RequestTenant} 不匹配，重新登录",
                                 user.TenantId, tenantInfo.TenantId);
                             return Challenge(new AuthenticationProperties
                             {
-                                RedirectUri = Request.PathBase + Request.Path + QueryString.Create(Request.HasFormContentType ? Request.Form : Request.Query)
+                                RedirectUri = Request.PathBase + Request.Path + QueryString.Create(
+                                    Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value)))
                             });
+                        }
+                    }
+                }
+
+                // 改动说明（v2.19.0 初始密码防绕过）：已登录 cookie 用户若密码仍为系统初始密码
+                // （如登录后改密页被中途关闭、cookie 仍在），授权入口弹回强制改密页，
+                // 改完重新登录回到本 authorize 请求；与 LoginController 登录守卫构成双防线
+                {
+                    var guardUserIdClaim = authResult.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
+                    if (Guid.TryParse(guardUserIdClaim, out var guardUserId))
+                    {
+                        var initialPassword = _configuration["Security:InitialUserPassword"];
+                        if (!string.IsNullOrEmpty(initialPassword) && await _userService.CheckPasswordAsync(guardUserId, initialPassword))
+                        {
+                            _logger.LogInformation("授权请求: 初始密码用户弹回强制改密 UserId={UserId}", guardUserId);
+                            var authorizeBack = Request.PathBase + Request.Path + Request.QueryString;
+                            return Redirect($"/profile/change-password?mustChange=1&returnUrl={Uri.EscapeDataString(authorizeBack.ToString())}");
                         }
                     }
                 }
