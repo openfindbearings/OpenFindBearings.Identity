@@ -185,7 +185,7 @@ jobs:
   # GITHUB_TOKEN 的 packages:write 无需新 secret；单架构构建（未声明 platform），
   # 一次推送=一个版本条目，不涉及多架构子 manifest 误删问题
   cleanup-old-images:
-    needs: deploy
+    needs: [build-and-push, deploy]
     runs-on: ubuntu-latest
     steps:
       - name: 清理 GHCR 旧镜像版本（保留最近 5 个）
