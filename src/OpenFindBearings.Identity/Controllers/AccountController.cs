@@ -29,17 +29,21 @@ namespace OpenFindBearings.Identity.Controllers
         // 改动说明（v2.19.0）：初始密码配置注入（Security:InitialUserPassword），
         // 后台建号空密码兜底 + reset-to-default 端点共用
         private readonly IConfiguration _configuration;
+        // 改动说明（验证码改密）：短信验证码校验服务，移动端改密验证身份用（type=reset_password）
+        private readonly ISmsCodeService _smsCodeService;
 
         public AccountController(
             IUserService userService,
             ApplicationDbContext context,
             ILogger<AccountController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ISmsCodeService smsCodeService)
         {
             _userService = userService;
             _context = context;
             _logger = logger;
             _configuration = configuration;
+            _smsCodeService = smsCodeService;
         }
 
         #region ========== 公开接口（无需认证）==========
@@ -208,6 +212,7 @@ namespace OpenFindBearings.Identity.Controllers
 
         /// <summary>
         /// 修改当前用户密码
+        /// 改动说明（验证码改密）：验证方式为短信验证码（VerifyCode，type=reset_password），不再验旧密码
         /// </summary>
         [HttpPost("me/change-password")]
         public async Task<ActionResult<ApiResponse<object>>> ChangeMyPassword([FromBody] ChangePasswordRequest request)
@@ -223,16 +228,28 @@ namespace OpenFindBearings.Identity.Controllers
                 return ApiResponseHelper.Unauthorized<object>(this, "User not authenticated");
             }
 
-            // 改动说明（短信登录上线）：验证码登录自动注册的用户没有密码，首次"设置密码"
-            // 不校验当前密码（Bearer 已证明身份）；已设密码的账号仍强制校验当前密码。
-            var hasPassword = await _userService.HasPasswordAsync(userId.Value);
-            if (hasPassword)
+            // 改动说明（验证码改密）：移动端改密验证由"验旧密码"改为手机验证码——
+            // 验证码登录注册的用户多数没有密码，且已有密码的用户一旦忘记旧密码将无路可走
+            // （能验证码登录却改不了密）。type=reset_password 与登录码（login）隔离，
+            // ValidateAndConsume 一次性消费防重放，5 次尝试上限由 SmsCode 仓储兜底。
+            // 网页端 ProfileController 维持验旧密码不变（后台账号两轨并行）。
+            if (string.IsNullOrWhiteSpace(request.VerifyCode))
             {
-                var isValid = await _userService.CheckPasswordAsync(userId.Value, request.CurrentPassword);
-                if (!isValid)
-                {
-                    return ApiResponseHelper.BadRequest<object>(this, "Current password is incorrect");
-                }
+                return ApiResponseHelper.BadRequest<object>(this, "验证码不能为空");
+            }
+
+            var me = await _userService.GetByIdAsync(userId.Value);
+            if (me == null || string.IsNullOrEmpty(me.PhoneNumber))
+            {
+                _logger.LogWarning("改密失败：账号未绑定手机号 UserId={UserId}", userId);
+                return ApiResponseHelper.BadRequest<object>(this, "账号未绑定手机号，无法验证码验证");
+            }
+
+            var codeOk = await _smsCodeService.ValidateAsync(me.PhoneNumber, request.VerifyCode, SmsCodeTypeConstants.ResetPassword);
+            if (!codeOk)
+            {
+                _logger.LogWarning("改密失败：验证码校验未通过 UserId={UserId}", userId);
+                return ApiResponseHelper.BadRequest<object>(this, "验证码错误或已过期");
             }
 
             var result = await _userService.ResetPasswordAsync(userId.Value, request.NewPassword);

@@ -65,7 +65,8 @@ namespace OpenFindBearings.Identity.Controllers;
         _logger.LogInformation("ProfileController: 修改密码, UserId={UserId}", userId);
 
         // 改动说明（短信登录上线）：无密码账号（验证码登录自动注册）首次设置密码时
-        // 跳过当前密码校验，与 API 端 ChangeMyPassword 保持同一规则
+        // 跳过当前密码校验。改动说明（验证码改密）：API 端 ChangeMyPassword 已改走短信验证码，
+        // 本网页端维持"验旧密码/首设跳过"不变（后台账号有密码、无发码交互），两轨并行
         var hasPassword = await _userService.HasPasswordAsync(userId);
         if (hasPassword)
         {
