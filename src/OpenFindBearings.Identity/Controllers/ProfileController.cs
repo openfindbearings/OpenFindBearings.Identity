@@ -64,12 +64,18 @@ namespace OpenFindBearings.Identity.Controllers;
 
         _logger.LogInformation("ProfileController: 修改密码, UserId={UserId}", userId);
 
-        var isValid = await _userService.CheckPasswordAsync(userId, request.CurrentPassword);
-        if (!isValid)
+        // 改动说明（短信登录上线）：无密码账号（验证码登录自动注册）首次设置密码时
+        // 跳过当前密码校验，与 API 端 ChangeMyPassword 保持同一规则
+        var hasPassword = await _userService.HasPasswordAsync(userId);
+        if (hasPassword)
         {
-            ViewBag.Error = "当前密码错误";
-            ViewBag.ReturnUrl = returnUrl;
-            return View();
+            var isValid = await _userService.CheckPasswordAsync(userId, request.CurrentPassword);
+            if (!isValid)
+            {
+                ViewBag.Error = "当前密码错误";
+                ViewBag.ReturnUrl = returnUrl;
+                return View();
+            }
         }
 
         var result = await _userService.ResetPasswordAsync(userId, request.NewPassword);

@@ -7,7 +7,11 @@ namespace OpenFindBearings.Identity.Models.Requests
     /// </summary>
     public class ChangePasswordRequest
     {
-        [Required(ErrorMessage = "当前密码不能为空")]
+        /// <summary>
+        /// 当前密码。
+        /// 改动说明（短信登录上线）：去掉 [Required]——验证码登录自动注册的用户没有密码，
+        /// 首次设置密码必须允许留空；已设密码的账号由服务端校验（留空视为错误）。
+        /// </summary>
         [DataType(DataType.Password)]
         public string CurrentPassword { get; set; } = string.Empty;
 

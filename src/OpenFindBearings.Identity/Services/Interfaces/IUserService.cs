@@ -153,6 +153,13 @@ namespace OpenFindBearings.Identity.Services.Interfaces
         Task<bool> CheckPasswordAsync(Guid userId, string password, CancellationToken ct = default);
 
         /// <summary>
+        /// 用户是否已设置密码。
+        /// 改动说明（短信登录上线）：验证码登录自动注册的用户没有密码，
+        /// 首次设置密码时不能要求"当前密码"，需据此分支判定。
+        /// </summary>
+        Task<bool> HasPasswordAsync(Guid userId, CancellationToken ct = default);
+
+        /// <summary>
         /// 记录登录成功
         /// </summary>
         Task RecordLoginSuccessAsync(Guid userId, string? ip = null, CancellationToken ct = default);
