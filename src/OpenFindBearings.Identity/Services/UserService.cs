@@ -706,6 +706,16 @@ namespace OpenFindBearings.Identity.Services
         }
 
         /// <inheritdoc/>
+        public async Task<bool> HasPasswordAsync(Guid userId, CancellationToken ct = default)
+        {
+            // 改动说明（短信登录上线）：区分"已设密码的老账号"与"验证码登录自动注册的无密码账号"，
+            // 后者首次设置密码时跳过当前密码校验（改动说明见 ChangeMyPassword）
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+            return await _userManager.HasPasswordAsync(user);
+        }
+
+        /// <inheritdoc/>
         public async Task RecordLoginSuccessAsync(Guid userId, string? ip = null, CancellationToken ct = default)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString());

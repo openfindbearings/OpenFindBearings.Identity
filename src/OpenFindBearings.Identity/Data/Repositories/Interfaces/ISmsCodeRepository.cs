@@ -28,11 +28,6 @@ namespace OpenFindBearings.Identity.Data.Repositories.Interfaces
         Task<SmsCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 根据手机号和验证码获取记录
-        /// </summary>
-        Task<SmsCode?> GetByCodeAsync(string phoneNumber, string code, string type, CancellationToken cancellationToken = default);
-
-        /// <summary>
         /// 根据手机号获取最新的有效验证码
         /// </summary>
         Task<SmsCode?> GetLatestValidCodeAsync(string phoneNumber, string type, CancellationToken cancellationToken = default);

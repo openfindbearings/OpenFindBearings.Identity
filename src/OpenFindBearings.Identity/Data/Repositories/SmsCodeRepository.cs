@@ -40,15 +40,9 @@ namespace OpenFindBearings.Identity.Data.Repositories
             return await _context.SmsCodes.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         }
 
-        public async Task<SmsCode?> GetByCodeAsync(string phoneNumber, string code, string type, CancellationToken cancellationToken = default)
-        {
-            return await _context.SmsCodes
-                .FirstOrDefaultAsync(x => x.PhoneNumber == phoneNumber
-                    && x.Code == code
-                    && x.Type == type
-                    && x.IsActive, cancellationToken);
-        }
-
+        /// <summary>
+        /// 根据手机号获取最新的有效验证码
+        /// </summary>
         public async Task<SmsCode?> GetLatestValidCodeAsync(string phoneNumber, string type, CancellationToken cancellationToken = default)
         {
             return await _context.SmsCodes
@@ -92,15 +86,35 @@ namespace OpenFindBearings.Identity.Data.Repositories
 
         public async Task<bool> ValidateAndConsumeAsync(string phoneNumber, string code, string type, CancellationToken cancellationToken = default)
         {
-            var smsCode = await GetByCodeAsync(phoneNumber, code, type, cancellationToken);
+            // 改动说明（短信登录上线）：原实现按"手机号 + 提交的验证码"精确查库，
+            // 猜错码时查不到任何记录 → 尝试次数永不累加，5 分钟有效期内可无限暴力枚举。
+            // 改为先取该手机号该类型最新一条有效验证码，统一在此比对并累计尝试次数，
+            // 达到上限（实体默认 5 次）即作废该码，堵住爆破口。
+            var smsCode = await _context.SmsCodes
+                .Where(x => x.PhoneNumber == phoneNumber
+                    && x.Type == type
+                    && x.IsActive)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (smsCode == null || !smsCode.IsValid())
+            if (smsCode == null)
             {
-                if (smsCode != null)
-                {
-                    smsCode.IncrementAttempt();
-                    await _context.SaveChangesAsync(cancellationToken);
-                }
+                return false;
+            }
+
+            // 已被猜满次数：直接软删作废，后续任何输入一律拒绝（需重新获取验证码）
+            if (smsCode.IsExceedMaxAttempts())
+            {
+                smsCode.SoftDelete();
+                await _context.SaveChangesAsync(cancellationToken);
+                return false;
+            }
+
+            // 过期/已用/码不匹配：累计一次失败尝试
+            if (!smsCode.IsValid() || smsCode.Code != code)
+            {
+                smsCode.IncrementAttempt();
+                await _context.SaveChangesAsync(cancellationToken);
                 return false;
             }
 

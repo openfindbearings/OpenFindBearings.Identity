@@ -223,10 +223,16 @@ namespace OpenFindBearings.Identity.Controllers
                 return ApiResponseHelper.Unauthorized<object>(this, "User not authenticated");
             }
 
-            var isValid = await _userService.CheckPasswordAsync(userId.Value, request.CurrentPassword);
-            if (!isValid)
+            // 改动说明（短信登录上线）：验证码登录自动注册的用户没有密码，首次"设置密码"
+            // 不校验当前密码（Bearer 已证明身份）；已设密码的账号仍强制校验当前密码。
+            var hasPassword = await _userService.HasPasswordAsync(userId.Value);
+            if (hasPassword)
             {
-                return ApiResponseHelper.BadRequest<object>(this, "Current password is incorrect");
+                var isValid = await _userService.CheckPasswordAsync(userId.Value, request.CurrentPassword);
+                if (!isValid)
+                {
+                    return ApiResponseHelper.BadRequest<object>(this, "Current password is incorrect");
+                }
             }
 
             var result = await _userService.ResetPasswordAsync(userId.Value, request.NewPassword);
