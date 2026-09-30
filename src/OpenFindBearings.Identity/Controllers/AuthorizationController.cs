@@ -483,11 +483,13 @@ namespace OpenFindBearings.Identity.Controllers
             var user = await _userService.GetByUsernameAsync(request.Username!, tenantInfo.TenantId.Value);
             if (user == null)
             {
+                // 改动说明：用户不存在时返回可区分的 error_description（原与密码错误同文案），
+                // 供 BFF 据此给移动端提示"账户不存在请先注册"，引导未注册手机号走验证码即注册通道
                 _logger.LogWarning("密码模式: 用户不存在 {Username}", request.Username);
                 return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
                 {
                     [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The username/password couple is invalid."
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user does not exist."
                 }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
