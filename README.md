@@ -25,3 +25,6 @@ OAuth 2.0 / OpenID Connect 认证中心，为所有业务系统提供统一的�
 | sync-client | Client Credentials | Sync ETL 服务 |
 | mobile-client | Password + SMS | 移动端 Taro App |
 | web-client | Authorization Code + PKCE | Web 前端 |
+## 部署
+
+K8s 部署清单模板见 [deploy/](./deploy/)（真实域名/集群细节占位符请在部署时替换为真实值，并自行创建 Secret 后 kubectl apply）。
