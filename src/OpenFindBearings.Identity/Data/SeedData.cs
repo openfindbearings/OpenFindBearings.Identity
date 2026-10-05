@@ -529,12 +529,12 @@ namespace OpenFindBearings.Identity.Data
                 DisplayName = "Admin 后台管理",
                 RedirectUris =
                 {
-                    new Uri("https://admin.515813.xyz/callback"),
+                    new Uri("https://<your-admin-domain>/callback"),
                     new Uri("https://localhost:7167/callback")
                 },
                 PostLogoutRedirectUris =
                 {
-                    new Uri("https://admin.515813.xyz/signout-callback-oidc"),
+                    new Uri("https://<your-admin-domain>/signout-callback-oidc"),
                     new Uri("https://localhost:7167/signout-callback-oidc")
                 },
                 ConsentType = ConsentTypes.Implicit,

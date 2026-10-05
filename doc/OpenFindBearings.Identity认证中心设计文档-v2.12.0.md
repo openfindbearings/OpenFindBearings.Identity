@@ -89,7 +89,7 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 | `sync-client` | 机密（有 secret） | 同步服务客户端 | client_credentials、refresh_token | Token | api:sync | 无（M2M） |
 | `mobile-client` | **公开**（无 secret） | 移动端 Taro | password、sms（custom）、refresh_token | Token、**Revocation** | api:mobile | 无（直连 token） |
 | `web-client` | 机密 | WEB 客户端（预留外部） | authorization_code、refresh_token | Authorization、Token、EndSession、Code、**PKCE 必需** | api:web | localhost:5002/signin-oidc |
-| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile、**offline_access** | admin.515813.xyz/callback、/signout-callback-oidc |
+| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile、**offline_access** | <your-admin-domain>/callback、/signout-callback-oidc |
 
 > 已落地：`mobile-client` 已补 `Permissions.Endpoints.Revocation`；`admin_client` 已补 `scp:offline_access`（授权码流程签发 refresh_token 的前提，Admin 无感续期的根修）。两处均配 SeedData 幂等补丁 `EnsureClientPermissionsAsync`（CreateIfNotExists 只建不改 → 对已存在客户端**只追加缺失权限、不覆盖既有字段**），老库发布新镜像即自愈，免手工 SQL。
 > [待实施 P1] SeedData 内 client secret（`SeedData.cs:459/497/523`）仍为明文常量，须移出源码、改 K8s Secret 注入（证书密码部分已完成，见 §8 S4）。

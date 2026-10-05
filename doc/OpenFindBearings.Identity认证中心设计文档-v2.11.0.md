@@ -77,7 +77,7 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 | `sync-client` | 机密（有 secret） | 同步服务客户端 | client_credentials、refresh_token | Token | api:sync | 无（M2M） |
 | `mobile-client` | **公开**（无 secret） | 移动端 Taro | password、sms（custom）、refresh_token | Token | api:mobile | 无（直连 token） |
 | `web-client` | 机密 | Web 客户端（预留外部） | authorization_code、refresh_token | Authorization、Token、EndSession、Code、**PKCE 必需** | api:web | localhost:5002/signin-oidc |
-| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile | admin.515813.xyz/callback、/signout-callback-oidc |
+| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile | <your-admin-domain>/callback、/signout-callback-oidc |
 
 > [待实施 P1] `mobile-client` 须补 `Permissions.Endpoints.Revocation`，否则移动端登出调 `/connect/revocation` 被拒。
 > [待实施 P1] SeedData 内 client secret（sync/web/admin）与证书密码默认值 `"111111"` 须移出源码、改 K8s Secret 注入。
