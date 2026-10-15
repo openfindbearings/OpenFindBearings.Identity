@@ -590,7 +590,7 @@ namespace OpenFindBearings.Identity.Controllers
                 request.Username, string.Join(",", scopes));
 
             // 改动说明：单设备互踢——签发新令牌前吊销该主体在本客户端下的旧刷新令牌，旧设备下次刷新即被拒。
-            // password/sms grant 仅移动端 mobile-client 使用，按 client 隔离天然不波及 Admin 网页/Sync 会话。
+            // password/sms grant 仅移动端 mobile-client 使用，按 client 隔离天然不波及 Admin 网页/互联网数据会话。
             await _tokenRevocation.RevokeRefreshTokensForClientAsync(user.Sub, request.ClientId);
 
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

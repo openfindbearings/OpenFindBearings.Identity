@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Constants;
+using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Models.Entities;
 using OpenFindBearings.Identity.Models.ValueObjects;
 using OpenIddict.Abstractions;
@@ -649,11 +650,26 @@ namespace OpenFindBearings.Identity.Data
                 logger.LogInformation("创建 Scope [{Name}] 成功", name);
             }
 
-            await CreateScopeWithTenantAsync("api:sync", new[] { ApiResourceConstants.BaseApi });
-            await CreateScopeWithTenantAsync("api:admin", new[] { ApiResourceConstants.BaseApi, ApiResourceConstants.SyncApi });
+            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的资源/scope（如闭源扩展）由 IIdentityExtension 声明，
+            //   开源无扩展 = 只建内置 scope；闭源专属 scope 已移出开源
+            var extensions = IdentityExtensionLoader.Discover();
+            var adminExtra = extensions
+                .SelectMany(e => e.AdditionalScopeResources())
+                .Where(x => x.ScopeName == "api:admin")
+                .Select(x => x.Resource)
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Distinct()
+                .ToArray();
+
+            await CreateScopeWithTenantAsync("api:admin", new[] { ApiResourceConstants.BaseApi }.Concat(adminExtra).ToArray());
             // 改动说明：api:maui 统一重命名为 api:mobile
             await CreateScopeWithTenantAsync("api:mobile", new[] { ApiResourceConstants.BaseApi });
             await CreateScopeWithTenantAsync("api:web", new[] { ApiResourceConstants.BaseApi });
+
+            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的额外 scope（如闭源 api:sync），开源无扩展 = 无
+            foreach (var ext in extensions)
+                foreach (var s in ext.AdditionalScopes())
+                    await CreateScopeWithTenantAsync(s.Name, s.Resources.ToArray());
         }
 
         #endregion

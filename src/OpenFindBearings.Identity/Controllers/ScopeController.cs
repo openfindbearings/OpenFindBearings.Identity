@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using OpenFindBearings.Identity.Constants;
+using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Models.DTOs.Scope;
 using OpenFindBearings.Identity.Models.DTOs.Tenant;
 using OpenFindBearings.Identity.Models.Entities;
@@ -59,7 +60,9 @@ namespace OpenFindBearings.Identity.Controllers
         {
             var used = (await _scopeService.GetAllAsync())
                 .SelectMany(s => s.Resources ?? (IReadOnlyList<string>)Array.Empty<string>());
-            return new[] { ApiResourceConstants.BaseApi, ApiResourceConstants.SyncApi }
+            // 改动说明（v2.18.0 通用扩展机制）：受众目录 = 内置 BaseApi + 扩展贡献（如闭源扩展资源）+ 既有 scope 已用资源
+            return new[] { ApiResourceConstants.BaseApi }
+                .Concat(IdentityExtensionLoader.AdditionalApiResources())
                 .Concat(used)
                 .Concat(extra ?? Enumerable.Empty<string>())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
