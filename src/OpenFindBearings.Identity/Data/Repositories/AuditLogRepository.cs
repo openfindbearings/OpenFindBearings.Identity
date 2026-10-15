@@ -166,7 +166,7 @@ namespace OpenFindBearings.Identity.Data.Repositories
         public async Task<int> GetTodayCountAsync(CancellationToken cancellationToken = default)
         {
             // 改动说明（v2.18.0 时间治理）：今日日志计数从 UTC 零点改为业务日界（默认北京），
-        // 与 API/Sync 侧统计口径统一
+        // 与 API/互联网数据侧统计口径统一
         var today = BusinessClock.TodayUtc;
             var tomorrow = today.AddDays(1);
 
