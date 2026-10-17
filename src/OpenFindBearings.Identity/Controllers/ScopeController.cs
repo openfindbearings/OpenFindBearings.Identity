@@ -60,7 +60,7 @@ namespace OpenFindBearings.Identity.Controllers
         {
             var used = (await _scopeService.GetAllAsync())
                 .SelectMany(s => s.Resources ?? (IReadOnlyList<string>)Array.Empty<string>());
-            // 改动说明（v2.18.0 通用扩展机制）：受众目录 = 内置 BaseApi + 扩展贡献（如闭源扩展资源）+ 既有 scope 已用资源
+            // 改动说明（v2.18.0 通用扩展机制）：受众目录 = 内置 BaseApi + 扩展贡献（如扩展资源）+ 既有 scope 已用资源
             return new[] { ApiResourceConstants.BaseApi }
                 .Concat(IdentityExtensionLoader.AdditionalApiResources())
                 .Concat(used)

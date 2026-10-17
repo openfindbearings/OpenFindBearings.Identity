@@ -5,7 +5,7 @@ namespace OpenFindBearings.Identity.Extensions;
 /// <summary>
 /// Identity 扩展加载器（v2.18.0 通用扩展机制）：反射发现当前 Identity 程序集中所有
 /// <see cref="IIdentityExtension"/> 实现。开源基座内无任何实现 = 返回空列表（零副作用）；
-/// 闭源在同项目新增实现类即被接入。
+/// 扩展方在同项目新增实现类即被接入。
 /// </summary>
 public static class IdentityExtensionLoader
 {
