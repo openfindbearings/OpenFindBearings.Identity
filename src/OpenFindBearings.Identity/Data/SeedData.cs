@@ -650,8 +650,8 @@ namespace OpenFindBearings.Identity.Data
                 logger.LogInformation("创建 Scope [{Name}] 成功", name);
             }
 
-            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的资源/scope（如闭源扩展）由 IIdentityExtension 声明，
-            //   开源无扩展 = 只建内置 scope；闭源专属 scope 已移出开源
+            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的资源/scope（如扩展）由 IIdentityExtension 声明，
+            //   开源无扩展 = 只建内置 scope；扩展专属 scope 已移出开源
             var extensions = IdentityExtensionLoader.Discover();
             var adminExtra = extensions
                 .SelectMany(e => e.AdditionalScopeResources())
@@ -666,7 +666,7 @@ namespace OpenFindBearings.Identity.Data
             await CreateScopeWithTenantAsync("api:mobile", new[] { ApiResourceConstants.BaseApi });
             await CreateScopeWithTenantAsync("api:web", new[] { ApiResourceConstants.BaseApi });
 
-            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的额外 scope（如闭源 api:sync），开源无扩展 = 无
+            // 改动说明（v2.18.0 通用扩展机制）：扩展贡献的额外 scope（如外部扩展 scope），开源无扩展 = 无
             foreach (var ext in extensions)
                 foreach (var s in ext.AdditionalScopes())
                     await CreateScopeWithTenantAsync(s.Name, s.Resources.ToArray());
