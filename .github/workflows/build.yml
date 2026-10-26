@@ -1,8 +1,8 @@
-name: build
+﻿name: build
 
 on:
-  push:
-    branches: ["main"]
+  # 改动说明（2026-10-25 省 Actions 额度）：去掉 push 触发，只在 PR 上构建（PR 检查已覆盖合并结果），
+  #   避免 dev→main 的 PR 与合并后各跑一遍；保留手动触发
   pull_request:
     branches: ["main"]
   workflow_dispatch:
