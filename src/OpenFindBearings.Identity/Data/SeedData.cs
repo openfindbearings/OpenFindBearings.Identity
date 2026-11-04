@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using OpenFindBearings.Identity.Constants;
 using OpenFindBearings.Identity.Extensions;
 using OpenFindBearings.Identity.Models.Entities;
@@ -31,6 +32,8 @@ namespace OpenFindBearings.Identity.Data
                 var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
                 var appManager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
                 var scopeManager = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
+                // 改动说明（v2.23.0）：客户端重定向地址改为配置驱动，种子过程不再硬编码占位域名
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
                 if (isDevelopment)
                 {
@@ -44,7 +47,7 @@ namespace OpenFindBearings.Identity.Data
                 await SeedUsersAsync(userManager, logger);
                 await SeedUserRolesAsync(userManager, roleManager, logger);
                 await SeedScopesAsync(scopeManager, context, logger);
-                await SeedClientsAsync(appManager, context, logger);
+                await SeedClientsAsync(appManager, context, configuration, logger);
 
                 logger.LogInformation("数据库初始化成功");
             }
@@ -427,9 +430,28 @@ namespace OpenFindBearings.Identity.Data
 
         #region OpenIddict 客户端和 Scope 初始化
 
-        private static async Task SeedClientsAsync(IOpenIddictApplicationManager appManager, ApplicationDbContext context, ILogger logger)
+        private static async Task SeedClientsAsync(
+            IOpenIddictApplicationManager appManager,
+            ApplicationDbContext context,
+            IConfiguration configuration,
+            ILogger logger)
         {
             var ofbTenantId = TenantConstants.OpenFindBearingsTenantId;
+
+            // 改动说明（v2.23.0）：admin_client 的重定向地址原为硬编码占位域名
+            //   https://<your-admin-domain>/callback，尖括号不是合法主机名，new Uri() 抛
+            //   UriFormatException 直接中断整个客户端种子（admin_client 与后续幂等补丁全部跳过）。
+            //   改为读取 Seed:Clients:Admin:BaseUrl（默认 localhost 开发地址），逐个校验合法性。
+            var adminBaseUrl = configuration["Seed:Clients:Admin:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(adminBaseUrl))
+                adminBaseUrl = "https://localhost:7167";
+
+            var adminRedirectUris = BuildClientUris(logger, "admin_client",
+                $"{adminBaseUrl.TrimEnd('/')}/callback",
+                "https://localhost:7167/callback");
+            var adminPostLogoutUris = BuildClientUris(logger, "admin_client",
+                $"{adminBaseUrl.TrimEnd('/')}/signout-callback-oidc",
+                "https://localhost:7167/signout-callback-oidc");
 
             async Task SetTenantIdAsync(string clientId, Guid tenantId)
             {
@@ -522,22 +544,12 @@ namespace OpenFindBearings.Identity.Data
                 }
             }, "web-client", ofbTenantId);
 
-            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
+            var adminClientDescriptor = new OpenIddictApplicationDescriptor
             {
                 ClientId = "admin_client",
                 ClientSecret = "admin-secret-key",
                 ClientType = ClientTypes.Confidential,
                 DisplayName = "Admin 后台管理",
-                RedirectUris =
-                {
-                    new Uri("https://<your-admin-domain>/callback"),
-                    new Uri("https://localhost:7167/callback")
-                },
-                PostLogoutRedirectUris =
-                {
-                    new Uri("https://<your-admin-domain>/signout-callback-oidc"),
-                    new Uri("https://localhost:7167/signout-callback-oidc")
-                },
                 ConsentType = ConsentTypes.Implicit,
                 Permissions =
                 {
@@ -557,7 +569,15 @@ namespace OpenFindBearings.Identity.Data
                     // 使 Admin 能在 access 过期后无感续期（此前缺它 → cookie 无 refresh → 过期即全站 401）。
                     Permissions.Prefixes.Scope + "offline_access"
                 }
-            }, "admin_client", ofbTenantId);
+            };
+
+            // 重定向地址来自配置（见方法开头），逐个加入描述符；非法值已在 BuildClientUris 中过滤
+            foreach (var uri in adminRedirectUris)
+                adminClientDescriptor.RedirectUris.Add(uri);
+            foreach (var uri in adminPostLogoutUris)
+                adminClientDescriptor.PostLogoutRedirectUris.Add(uri);
+
+            await CreateIfNotExistsAsync(adminClientDescriptor, "admin_client", ofbTenantId);
 
             // 幂等补丁：老库 seed 时 mobile-client 尚无 ept:revocation（登出吊销刷新令牌所需）。
             // CreateIfNotExistsAsync 只建不改，故此处对已存在的 mobile-client 追加缺失权限，不覆盖其它字段。
@@ -571,6 +591,108 @@ namespace OpenFindBearings.Identity.Data
             // 故对已存在的 admin_client 追加 scp:offline_access，发布即生效、免手工 SQL。
             await EnsureClientPermissionsAsync(context, logger, "admin_client",
                 new[] { Permissions.Prefixes.Scope + "offline_access" });
+
+            // 幂等补丁：把配置里的真实域名补进已存在 admin_client 的重定向列表。
+            // CreateIfNotExistsAsync 只建不改，换域名或老库残留占位地址时靠这里补齐，避免登录回跳被拒。
+            await EnsureClientRedirectUrisAsync(context, logger, "admin_client",
+                adminRedirectUris, adminPostLogoutUris);
+        }
+
+        /// <summary>
+        /// 将候选地址解析为合法的绝对 http/https URI 列表。
+        /// 非法候选（例如未被替换的占位符、空串）只记警告并跳过，绝不抛异常，
+        /// 避免单个坏配置导致整个客户端种子中断。
+        /// </summary>
+        private static List<Uri> BuildClientUris(ILogger logger, string clientId, params string[] candidates)
+        {
+            var uris = new List<Uri>();
+            foreach (var candidate in candidates)
+            {
+                if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+                    && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                {
+                    if (!uris.Contains(uri))
+                        uris.Add(uri);
+                }
+                else
+                {
+                    logger.LogWarning("客户端 {ClientId} 的地址 {Url} 非法，已跳过；请检查 Seed:Clients 配置",
+                        clientId, candidate);
+                }
+            }
+            return uris;
+        }
+
+        /// <summary>
+        /// 幂等补齐指定客户端的重定向地址：仅追加缺失项、不动既有项。
+        /// 两个字段均为 EF JSON 文本列，解析失败时记警告并跳过，不影响其它种子步骤。
+        /// </summary>
+        private static async Task EnsureClientRedirectUrisAsync(
+            ApplicationDbContext context,
+            ILogger logger,
+            string clientId,
+            List<Uri> redirectUris,
+            List<Uri> postLogoutRedirectUris)
+        {
+            var apps = context.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+            var app = await apps.AsTracking().FirstOrDefaultAsync(a => a.ClientId == clientId);
+            if (app == null) return;
+
+            var changed = false;
+
+            if (TryMergeUriJson(app.RedirectUris, redirectUris, out var mergedRedirect))
+            {
+                app.RedirectUris = mergedRedirect;
+                changed = true;
+            }
+
+            if (TryMergeUriJson(app.PostLogoutRedirectUris, postLogoutRedirectUris, out var mergedLogout))
+            {
+                app.PostLogoutRedirectUris = mergedLogout;
+                changed = true;
+            }
+
+            if (!changed) return;
+
+            await context.SaveChangesAsync();
+            logger.LogInformation("幂等补丁：客户端 {ClientId} 补齐重定向地址 {Uris}",
+                clientId, string.Join(",", redirectUris.Concat(postLogoutRedirectUris)));
+        }
+
+        /// <summary>
+        /// 把期望的 URI 合并进 OpenIddict 的 JSON 文本列。
+        /// 返回 true 表示确有新增（需要回写）；json 解析失败返回 false 并保留原值。
+        /// </summary>
+        private static bool TryMergeUriJson(string? json, IEnumerable<Uri> desired, out string merged)
+        {
+            merged = json ?? "[]";
+            List<string> current;
+            try
+            {
+                current = string.IsNullOrWhiteSpace(json)
+                    ? new List<string>()
+                    : (System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>());
+            }
+            catch
+            {
+                return false;
+            }
+
+            var changed = false;
+            foreach (var uri in desired)
+            {
+                var value = uri.ToString();
+                if (!current.Contains(value))
+                {
+                    current.Add(value);
+                    changed = true;
+                }
+            }
+
+            if (!changed) return false;
+
+            merged = System.Text.Json.JsonSerializer.Serialize(current);
+            return true;
         }
 
         /// <summary>
