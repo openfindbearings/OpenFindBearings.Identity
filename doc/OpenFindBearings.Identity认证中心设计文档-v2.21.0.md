@@ -1,8 +1,8 @@
 # OpenFindBearings.Identity 认证中心设计文档
 
-**版本：** v2.20.0
-**日期：** 2026-09-30
-**状态：** 文档与代码同步（移动端验证码改密落地）
+**版本：** v2.21.0
+**日期：** 2026-11-04
+**状态：** 文档与代码同步（客户端回调地址配置化）
 
 ---
 
@@ -21,6 +21,7 @@
 | v2.19.0 | 2026-09-26 | 初始密码强制改密体系：① 配置 Security:InitialUserPassword（初始密码单一事实源，K8s 可覆盖）；② AdminCreateUser 密码可空——空则自动用初始密码建号；③ 新端点 POST /api/account/admin/users/{id}/reset-to-default（不传密码，重置为初始密码并回显一次供转告）；④ 登录守卫：LoginController 登录成功后现场 CheckPassword 比对初始密码，命中即重定向 /profile/change-password?mustChange=1（警示条不可跳过文案）；⑤ 授权防绕过：AuthorizationController 已登录 cookie 用户授权入口二次比对，中途逃逸弹回改密页；⑥ 改密成功回登录页保留 returnUrl，重登续接原 OIDC 流程。Taro/Admin 均走 Identity 登录页，一处守卫全端覆盖；无密码（验证码/微信）用户比对恒 false 天然豁免；⑦ UserStatusFilter 新增 Deleted=4 枚举+UserService 状态过滤分支（Admin 用户页黑名单/已删除状态筛选消费，OpenIddict 配置零改动）；⑧ UserDto/UserResponse 透出 IsLockedOut（IsTemporarilyLocked 计算值），支撑 Admin 列表锁定徽章与解锁按钮
 | v2.16.0 | 2026-09-22 | **注销/匿名化内部端点**（UsersApiController 扩展，对齐 API《06 v2.14.0》账户注销真闭环）：`POST /api/users/deactivate`（按 subject 软删除账户=禁用+永久锁定+DeletedAt，并吊销该用户全部刷新令牌实现全设备下线）；`POST /api/users/anonymize`（冷静期满由 API 定时任务调用：清手机号/邮箱、用户名改 deleted-{guid} 占位、刷新 SecurityStamp 使残留会话失效）。均 AllowAnonymous + 集群内网隔离（与 by-phone 同信任边界），不动 OpenIddict/OAuth 配置。 |
 | v2.20.0 | 2026-09-30 | **移动端改密改短信验证码**（动因：验证码注册用户多数无密码，且已有密码的用户忘记旧密码时改密无路可走——能验证码登录却改不了密属死锁）：① `ChangePasswordRequest` 加 `VerifyCode` 字段（模型级不加 `[Required]`——与网页端 ProfileController 共用模型，必填由各端点自行把关）；② `AccountController.ChangeMyPassword` 删"有密码验旧密码"分支，改为强制验证码校验——取当前用户 `UserDto.PhoneNumber` → `SmsCodeService.ValidateAsync(phone, code, SmsCodeTypeConstants.ResetPassword)`（`type=reset_password` 与登录码 login 隔离，`ValidateAndConsume` 一次性消费防重放，5 次尝试上限由 SmsCode 仓储兜底）；无码/无绑定手机号/码错均 400 中文文案；③ 注入 `ISmsCodeService`；④ 网页端 `ProfileController` 维持"验旧密码/首设跳过"不变（后台账号有密码、无发码交互，两轨并行，注释已注明），§7.5 吊销触发表两条改密入口均不受影响；⑤ OpenIddict 注册/权限/scope/端点处理器零改动。配套：BFF v1.11.0（verifyCode 透传 + send-code type）、Taro v1.7.28（改密两页：验证码页 + 设置新密码页） |
+| v2.21.0 | 2026-11-04 | **客户端回调地址配置化**（动因：`admin_client` 的重定向地址硬编码为占位域名 `https://<your-admin-domain>/callback`，尖括号不是合法主机名，`new Uri()` 抛 `UriFormatException` 使整个 `SeedClientsAsync` 中断——admin_client 及后续 `EnsureClientPermissionsAsync` 补丁全部跳过，生产环境 Identity 启动即停在"数据库初始化失败"，API 探针随之连锁超时重启）：① 新增配置 `Seed:Clients:Admin:BaseUrl`（默认 `https://localhost:7167`），种子按它拼 `/callback` 与 `/signout-callback-oidc`；② 新增 `BuildClientUris`，候选地址逐个 `Uri.TryCreate` 校验，非法值只记警告并跳过，单个坏配置不再中断种子；③ 新增幂等补丁 `EnsureClientRedirectUrisAsync`——对已存在的 `admin_client` 只追加缺失的重定向地址、不覆盖既有项，换域名或老库残留占位地址时发布即自愈；④ 部署侧 Infra `identity/configMap.yml` 与开源 `deploy/configMap.yml` 同步注入该键。OpenIddict 注册/权限/scope/端点处理器零改动。 |
 
 ---
 
@@ -100,8 +101,9 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 | `sync-client` | 机密（有 secret） | 同步服务客户端 | client_credentials、refresh_token | Token | api:sync | 无（M2M） |
 | `mobile-client` | **公开**（无 secret） | 移动端 Taro | password、sms（custom）、refresh_token | Token、**Revocation** | api:mobile | 无（直连 token） |
 | `web-client` | 机密 | WEB 客户端（预留外部） | authorization_code、refresh_token | Authorization、Token、EndSession、Code、**PKCE 必需** | api:web | localhost:5002/signin-oidc |
-| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile、**offline_access** | <your-admin-domain>/callback、/signout-callback-oidc |
+| `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile、**offline_access** | `Seed:Clients:Admin:BaseUrl` + `/callback`、`/signout-callback-oidc`（另含 `localhost:7167` 开发地址，v2.21.0 起配置化） |
 
+> v2.21.0 起客户端回调地址由配置驱动：`Seed:Clients:Admin:BaseUrl` 决定 `admin_client` 的回调基址，非法值只警告跳过（`BuildClientUris`），已存在客户端由 `EnsureClientRedirectUrisAsync` 幂等补齐缺失地址。
 > 已落地：`mobile-client` 已补 `Permissions.Endpoints.Revocation`；`admin_client` 已补 `scp:offline_access`（授权码流程签发 refresh_token 的前提，Admin 无感续期的根修）。两处均配 SeedData 幂等补丁 `EnsureClientPermissionsAsync`（CreateIfNotExists 只建不改 → 对已存在客户端**只追加缺失权限、不覆盖既有字段**），老库发布新镜像即自愈，免手工 SQL。
 > [待实施 P1] SeedData 内 client secret（`SeedData.cs:459/501/527`）仍为明文常量，须移出源码、改 K8s Secret 注入（证书密码部分已完成，见 §8 S4）。
 

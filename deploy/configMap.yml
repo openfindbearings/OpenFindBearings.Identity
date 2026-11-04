@@ -12,6 +12,9 @@ data:
   AllowedHosts: "*"
   AllowedOrigins__0: "https://<your-site-domain>"
   AllowedOrigins__1: "https://<your-site-domain>"
+  # 改动说明（v2.23.0）：admin_client 的登录回跳基址。种子按它拼接 /callback 与
+  #   /signout-callback-oidc；不配置时退回 http://localhost:7167（仅本地开发可用）。
+  Seed__Clients__Admin__BaseUrl: "https://<your-admin-domain>"
   # 改动说明（验证码登录上线）：原型期固定验证码模式，未接真实短信通道前
   # 发码落库固定 123456（不外发），供移动端验证码登录端到端联调；
   # 功能开关不进 Secret。接入真实短信通道时删除这两键即可回到随机码。
