@@ -43,6 +43,12 @@ spec:
         image: ghcr.io/openfindbearings/openfindbearings-identity:latest
         ports:
         - containerPort: 8080
+        # 改动说明（2026-11-05）：补 requests 使 QoS 从 BestEffort 变为 Burstable，
+        # 节点内存紧张时不再是最先被驱逐/OOM 的一批；不设 limit，避免正常使用被限死
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
 
         env:
         - name: ASPNETCORE_ENVIRONMENT
