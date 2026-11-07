@@ -44,11 +44,14 @@ spec:
         ports:
         - containerPort: 8080
         # 改动说明（2026-11-05）：补 requests 使 QoS 从 BestEffort 变为 Burstable，
-        # 节点内存紧张时不再是最先被驱逐/OOM 的一批；不设 limit，避免正常使用被限死
+        # 节点内存紧张时不再是最先被驱逐/OOM 的一批
+        # 改动说明（2026-11-07）：补 memory limit 给 GC 硬边界，避免 GC 视整节点内存为可用而无限扩张
         resources:
           requests:
             cpu: 50m
             memory: 128Mi
+          limits:
+            memory: 512Mi
 
         env:
         - name: ASPNETCORE_ENVIRONMENT
@@ -62,6 +65,9 @@ spec:
         # 改动说明：Data Protection 密钥持久化目录，避免 Pod 重启导致 OIDC 关联 state / 认证 cookie 解密失效
         - name: DataProtection__KeysPath
           value: "/app/dpkeys"
+        # 改动说明（2026-11-07）：改用 Workstation GC，规避 .NET Server GC 线程在 libc 内崩溃（exit 139）
+        - name: DOTNET_gcServer
+          value: "0"
         envFrom:
         - secretRef:
             name: openfindbearings-identity-secrets
