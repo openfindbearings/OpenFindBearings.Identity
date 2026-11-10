@@ -320,6 +320,21 @@ namespace OpenFindBearings.Identity.Models.Entities
         /// <returns>是否触发了锁定</returns>
         public bool RecordFailedLogin(int maxAttempts = 5, int lockoutMinutes = 15)
         {
+            // 改动说明：原实现用 >= maxAttempts 判定且计数只在登录成功时归零，
+            //   锁定到期后只要再错一次就立刻重新锁满 15 分钟，用户越试越锁，表现为"怎么都登不进去"。
+            //   现在：仍在锁定窗口内不累计、不续期（客户端自动重试不得延长锁定）；
+            //   锁定已过期则视为新一轮，先清零再计本次失败。
+            if (LockoutEnabled && LockoutEnd.HasValue && LockoutEnd > DateTimeOffset.UtcNow)
+            {
+                return true;
+            }
+
+            if (LockoutEnd.HasValue)
+            {
+                LockoutEnd = null;
+                AccessFailedCount = 0;
+            }
+
             AccessFailedCount++;
             // 改动说明：登录失败属安全状态变更、非"资料编辑"，不再刷新 UpdatedAt（UpdatedAt 仅反映资料修改）。
 

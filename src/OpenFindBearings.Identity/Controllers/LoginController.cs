@@ -109,7 +109,15 @@ namespace OpenFindBearings.Identity.Controllers
 
             if (!user.IsAvailable())
             {
-                SetViewBagForLogin(tenantId, tenantInfo.Realm ?? "", tenantInfo.TenantDescription ?? "", "账户不可用", returnUrl);
+                // 改动说明：区分"已删除 / 已禁用 / 临时锁定"三态并给出剩余锁定分钟数。
+                //   原实现统一回"账户不可用"，用户无法判断该等待还是找管理员，只会反复重试。
+                var lockMinutes = Math.Max(1, (int)Math.Ceiling(user.GetRemainingLockoutTime()?.TotalMinutes ?? 1));
+                var reason = !user.IsActive
+                    ? "账户已删除，请联系管理员恢复"
+                    : !user.IsEnabled
+                        ? "账户已被管理员禁用，请联系管理员"
+                        : $"密码错误次数过多，账户已锁定，请 {lockMinutes} 分钟后重试";
+                SetViewBagForLogin(tenantId, tenantInfo.Realm ?? "", tenantInfo.TenantDescription ?? "", reason, returnUrl);
                 return View("Login");
             }
 
