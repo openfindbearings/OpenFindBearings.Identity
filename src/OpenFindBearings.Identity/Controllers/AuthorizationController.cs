@@ -499,8 +499,9 @@ namespace OpenFindBearings.Identity.Controllers
             var canLogin = await _userService.CheckCanLoginAsync(user.Id);
             if (!canLogin)
             {
+                // 改动说明：账户已处于禁用/锁定/删除状态时不再记录登录失败——
+                //   原实现把"不可用"也计为一次凭证失败，会给锁定续期，客户端自动重试可无限延长锁定
                 _logger.LogWarning("密码模式: 用户无法登录 {Username}", request.Username);
-                await _userService.RecordLoginFailureAsync(user.Id);
                 return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
                 {
                     [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
@@ -845,8 +846,8 @@ namespace OpenFindBearings.Identity.Controllers
             var canLogin = await _userService.CheckCanLoginAsync(user.Id);
             if (!canLogin)
             {
+                // 改动说明：同密码模式，账户已不可用时不再累计失败次数，避免给锁定续期
                 _logger.LogWarning("SMS模式: 用户无法登录 Phone={Phone}", phone);
-                await _userService.RecordLoginFailureAsync(user.Id);
                 return Forbid(new AuthenticationProperties(new Dictionary<string, string?>
                 {
                     [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
