@@ -28,6 +28,24 @@ public static class IdentityExtensionLoader
     }
 
     /// <summary>
+    /// 发现并实例化所有客户端扩展（无实现 = 空列表）。
+    /// </summary>
+    /// <returns>客户端扩展列表</returns>
+    public static IReadOnlyList<IIdentityClientExtension> DiscoverClientExtensions()
+    {
+        var list = new List<IIdentityClientExtension>();
+        foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+        {
+            if (type.IsAbstract || type.IsInterface || !typeof(IIdentityClientExtension).IsAssignableFrom(type))
+                continue;
+
+            if (Activator.CreateInstance(type) is IIdentityClientExtension ext)
+                list.Add(ext);
+        }
+        return list;
+    }
+
+    /// <summary>
     /// 汇总所有扩展贡献的额外受众资源（去重、去空）。
     /// </summary>
     /// <returns>额外受众资源列表（开源无扩展 = 空）</returns>

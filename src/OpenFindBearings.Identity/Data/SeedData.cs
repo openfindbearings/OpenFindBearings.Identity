@@ -636,6 +636,135 @@ namespace OpenFindBearings.Identity.Data
             // CreateIfNotExistsAsync 只建不改，换域名或老库残留占位地址时靠这里补齐，避免登录回跳被拒。
             await EnsureClientRedirectUrisAsync(context, logger, "admin_client",
                 adminRedirectUris, adminPostLogoutUris);
+
+            // 扩展客户端：由 IIdentityClientExtension 实现贡献（如机器对机器客户端），开源无实现 = 空操作
+            await EnsureExtensionClientsAsync(appManager, context, ofbTenantId, logger);
+        }
+
+        /// <summary>
+        /// 幂等注册扩展客户端：缺失则创建；已存在则校验密钥并在不一致时更新（支持密钥轮换），
+        /// 同时确保客户端归属业务租户。密钥由扩展实现方从配置或密钥系统读取，不进入源码。
+        /// </summary>
+        private static async Task EnsureExtensionClientsAsync(
+            IOpenIddictApplicationManager appManager,
+            ApplicationDbContext context,
+            Guid tenantId,
+            ILogger logger)
+        {
+            foreach (var extension in IdentityExtensionLoader.DiscoverClientExtensions())
+            {
+                foreach (var definition in extension.AdditionalClients())
+                {
+                    if (string.IsNullOrWhiteSpace(definition.ClientId))
+                    {
+                        continue;
+                    }
+
+                    var existing = await appManager.FindByClientIdAsync(definition.ClientId);
+                    if (existing is null)
+                    {
+                        if (string.IsNullOrWhiteSpace(definition.ClientSecret))
+                        {
+                            logger.LogWarning(
+                                "扩展客户端 [{ClientId}] 未提供密钥，跳过注册（机密客户端不允许无密钥）",
+                                definition.ClientId);
+                            continue;
+                        }
+
+                        var descriptor = new OpenIddictApplicationDescriptor
+                        {
+                            ClientId = definition.ClientId,
+                            ClientSecret = definition.ClientSecret,
+                            DisplayName = definition.DisplayName,
+                            ClientType = ClientTypes.Confidential,
+                            Permissions =
+                            {
+                                Permissions.Endpoints.Token,
+                                Permissions.Endpoints.Revocation,
+                                Permissions.GrantTypes.ClientCredentials,
+                                Permissions.Scopes.Profile,
+                                Permissions.Scopes.Email,
+                                Permissions.Scopes.Roles
+                            }
+                        };
+
+                        foreach (var scope in definition.Scopes)
+                        {
+                            descriptor.Permissions.Add(Permissions.Prefixes.Scope + scope);
+                        }
+
+                        await appManager.CreateAsync(descriptor);
+                        await SetClientTenantAsync(context, definition.ClientId, tenantId);
+                        logger.LogInformation("扩展客户端 [{ClientId}] 已创建", definition.ClientId);
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(definition.ClientSecret))
+                    {
+                        var matches = await appManager.ValidateClientSecretAsync(existing, definition.ClientSecret);
+                        if (!matches)
+                        {
+                            // 轮换密钥：先克隆既有字段再覆盖 secret，避免 UpdateAsync 整体覆盖时丢重定向/权限
+                            var descriptor = await CloneClientDescriptorAsync(appManager, existing);
+                            descriptor.ClientSecret = definition.ClientSecret;
+                            await appManager.UpdateAsync(existing, descriptor);
+                            logger.LogInformation("扩展客户端 [{ClientId}] 密钥已更新", definition.ClientId);
+                        }
+                    }
+
+                    await SetClientTenantAsync(context, definition.ClientId, tenantId);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 从既有 application 克隆完整描述符（不含 secret），供密钥轮换时整体更新而不丢字段。
+        /// OpenIddict 的 UpdateAsync 以传入描述符整体覆盖记录，因此必须先读出全部既有字段。
+        /// </summary>
+        private static async Task<OpenIddictApplicationDescriptor> CloneClientDescriptorAsync(
+            IOpenIddictApplicationManager appManager,
+            object application)
+        {
+            var descriptor = new OpenIddictApplicationDescriptor
+            {
+                ClientId = await appManager.GetClientIdAsync(application),
+                ClientType = await appManager.GetClientTypeAsync(application),
+                ConsentType = await appManager.GetConsentTypeAsync(application),
+                DisplayName = await appManager.GetDisplayNameAsync(application)
+            };
+
+            foreach (var uri in await appManager.GetRedirectUrisAsync(application))
+            {
+                descriptor.RedirectUris.Add(new Uri(uri));
+            }
+
+            foreach (var uri in await appManager.GetPostLogoutRedirectUrisAsync(application))
+            {
+                descriptor.PostLogoutRedirectUris.Add(new Uri(uri));
+            }
+
+            foreach (var permission in await appManager.GetPermissionsAsync(application))
+            {
+                descriptor.Permissions.Add(permission);
+            }
+
+            return descriptor;
+        }
+
+        /// <summary>
+        /// 确保客户端归属指定租户：OpenIddict 实体上的 TenantId 为影子属性，需按 ClientId 定位后写入。
+        /// </summary>
+        private static async Task SetClientTenantAsync(ApplicationDbContext context, string clientId, Guid tenantId)
+        {
+            var applications = context.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>();
+            var application = await applications.AsTracking().FirstOrDefaultAsync(a => a.ClientId == clientId);
+            if (application is null)
+            {
+                return;
+            }
+
+            context.Entry(application).Property("TenantId").CurrentValue = tenantId;
+            await context.SaveChangesAsync();
         }
 
         /// <summary>
