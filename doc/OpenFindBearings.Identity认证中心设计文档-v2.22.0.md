@@ -11,7 +11,7 @@
 | 版本 | 日期 | 变更说明 |
 |------|------|----------|
 | v2.21.1 | 2026-11-10 | 登录锁定修正：① `RecordFailedLogin` 锁定过期后先清零再计本次失败（原实现锁到期仍保留计数，再错一次即重锁 15 分钟，形成"越试越锁"循环）；② 仍在锁定窗口内不再累计、不续期；③ 密码/短信授权在 `CheckCanLoginAsync` 为 false 时不再记失败（原会给锁定续期）；④ 管理台登录页区分「已删除 / 已禁用 / 临时锁定（含剩余分钟数）」三态提示，替代统一的"账户不可用" |
-| v2.22.0 | 2026-11-19 | **种子数据加固（本地/全新库可直接启动）**：① 迁移从 `SeedData.SeedAsync` 上移到 `Program.cs` 启动块并直接 await，失败即启动失败（原被种子阶段 try/catch 吞掉，残库照常服务）；② 租户按固定 Id、角色按名称、用户按 Id 或「用户名+租户」逐个 ensure，不再"存在任意数据即整体跳过"；③ 五个演示/测试账号（zhangsan/lisi/wangwu/lockeduser/testuser）只在 Development 创建，生产库不再出现已知密码的测试用户；④ 两个管理员账号改为读 `Security:InitialUserPassword` 作为初始密码，与后台首次登录改密口径一致；⑤ 用户-角色关联改为 `IsInRoleAsync` 判重后追加 |
+| v2.22.0 | 2026-11-19 | **种子数据加固（本地/全新库可直接启动）**：① 迁移从 `SeedData.SeedAsync` 上移到 `Program.cs` 启动块并直接 await，失败即启动失败（原被种子阶段 try/catch 吞掉，残库照常服务）；② 租户按固定 Id、角色按名称、用户按 Id 或「用户名+租户」逐个 ensure，不再"存在任意数据即整体跳过"；③ 五个演示/测试账号（zhangsan/lisi/wangwu/lockeduser/testuser）只在 Development 创建，生产库不再出现已知密码的测试用户；④ 两个管理员账号改为读 `Security:InitialUserPassword` 作为初始密码，与后台首次登录改密口径一致；⑤ 用户-角色关联改为 `IsInRoleAsync` 判重后追加；⑥ 删除 `sync-client` 种子、README 与文档条目：开源版不提供同步服务，原客户端的固定密钥曾随源码公开，部署方如需 M2M 客户端应自行注册并从密钥系统注入 |
 | v1.0.0 ~ v2.10.0 | 2026-05 ~ 09 | 见历史版本文件（用户/角色/租户隔离/OIDC 端点/SMS grant/设备绑定/客户端命名统一等） |
 | v2.11.0 | 2026-09-08 | 移动端登录与商户入驻设计评审结论纳入；提出 P1 安全完善清单 S1-S9 |
 | v2.12.0 | 2026-09-10 | ① access 寿命定案 10 分钟；② S1-S9 按已实现记录；③ §5.2 受众编辑、§5.3 客户端管理修复按落地情况更新；④ §9 管理端点角色门禁已补齐；⑤ §4 补 OpenIddict 双表合并 + 表名去 Oidc 前缀；⑥ §8 新增 S10 注册用户默认角色 |
@@ -100,7 +100,6 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 
 | ClientId | 类型 | 显示名 | 授权类型 | 端点/关键权限 | Scope | 重定向 |
 |---|---|---|---|---|---|---|
-| `sync-client` | 机密（有 secret） | 同步服务客户端 | client_credentials、refresh_token | Token | api:sync | 无（M2M） |
 | `mobile-client` | **公开**（无 secret） | 移动端 Taro | password、sms（custom）、refresh_token | Token、**Revocation** | api:mobile | 无（直连 token） |
 | `web-client` | 机密 | WEB 客户端（预留外部） | authorization_code、refresh_token | Authorization、Token、EndSession、Code、**PKCE 必需** | api:web | localhost:5002/signin-oidc |
 | `admin_client` | 机密 | Admin 后台管理 | authorization_code、refresh_token | Authorization、Token、EndSession、Code；ConsentType=Implicit | openid、api:admin、api:mobile、**offline_access** | `Seed:Clients:Admin:BaseUrl` + `/callback`、`/signout-callback-oidc`（另含 `localhost:7167` 开发地址，v2.21.0 起配置化） |
@@ -112,10 +111,11 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 ### 5.1 Scope 与资源（aud）模型
 | Scope | 关联资源（token 的 aud） |
 |-------|------|
-| api:sync | openfindbearings-api |
 | api:admin | openfindbearings-api、openfindbearings-sync |
 | api:mobile | openfindbearings-api |
 | api:web | openfindbearings-api |
+
+> 开源版只注册 admin / mobile / web 三个客户端；需要机器对机器（M2M）同步等额外能力时，由部署方在扩展中追加客户端与 scope，客户端密钥一律从密钥管理系统注入，不得写入源码。
 
 每个后台微服务有独立资源标识；`api:admin` 关联全部服务资源，Admin token 携多 aud 可统一访问后台微服务。新增服务时在 `ApiResourceConstants` 加常量并追加到 `api:admin` 资源列表。
 
@@ -196,7 +196,7 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 
 ### 7.4 单设备互踢（已实现，按 client 隔离）
 - 目标：同账号在同一客户端只允许一个会话在线，新登录踢旧（微信式），**按 client 隔离**——不影响 Admin 网页 / Sync M2M。
-- 机制：password/sms grant 登录成功、签发新令牌**之前**，`TokenRevocationService.RevokeRefreshTokensForClientAsync(subject, clientId)` 吊销该 subject 在**该 client** 下的既有 refresh token（AuthorizationController，password grant 与 sms grant 两处）。当前实际走 password/sms 的只有 mobile-client，等效"限移动端"；sync-client 是 client_credentials 不经过此路径。
+- 机制：password/sms grant 登录成功、签发新令牌**之前**，`TokenRevocationService.RevokeRefreshTokensForClientAsync(subject, clientId)` 吊销该 subject 在**该 client** 下的既有 refresh token（AuthorizationController，password grant 与 sms grant 两处）。当前实际走 password/sms 的只有 mobile-client，等效"限移动端"；client_credentials 的机器对机器客户端不经过此路径。
 - 生效时延：旧设备手里 access token（≤10 分钟）过期后刷新被拒 → 掉线回登录页。**非秒踢**（无推送通道；秒踢需 reference token + introspection，不做）。
 - 与 device_id 关系：互补——互踢管"同账号一台设备在线"，device_id 管"token 不被异机盗用"。两者都保留。
 
@@ -221,7 +221,7 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 | S1 | 账户锁定 + 端点限流 | 已完成 | 域内锁定：`OidcUser.RecordFailedLogin`（5 次失败锁 15 分钟；锁定过期后失败计数先清零再计本次，避免到期后一次手误即重锁；锁定窗口内不累计不续期）+ 认证端点 IP 限流 30/分钟（§6.2）。`CheckCanLoginAsync` 为 false 的密码/短信授权直接拒绝且不再记失败。管理台登录页按「已删除 / 已禁用 / 临时锁定（剩余分钟数）」分别提示。`IdentityOptions.Lockout` 三行注释保留（不走 SignInManager 锁定机制，不依赖）。 | P1 |
 | S2 | 刷新查用户状态 | 已完成 | `HandleRefreshTokenAsync` 已调 `CheckCanLoginAsync`。 | P1 |
 | S3 | 令牌吊销 | 已完成 | 见 §7.5（TokenRevocationService + UserService 四触发点 + 登出 revocation）。 | P1 |
-| S4 | 机密出源码 | **部分** | 已完成：生产证书密码去默认值，缺失配置快速失败（K8s Secret 注入）。未完成：SeedData 三个 client secret 仍明文常量（sync-client :459、web-client :501、admin_client :527）。 | P1 |
+| S4 | 机密出源码 | **部分** | 已完成：生产证书密码去默认值，缺失配置快速失败（K8s Secret 注入）。v2.22.0 起开源版删除写死密钥的 sync-client 种子；未完成：SeedData 仍以明文常量注册 web-client 与 admin_client 的客户端密钥，后续需改为配置注入。 | P1 |
 | S5 | Data Protection 持久化 | 已完成 | `Program.cs` 按 `DataProtection:KeysPath` 启用；K3s 配 hostPath `/app/dpkeys`（单副本）。Pod 重启后 OIDC 关联 state/认证 cookie 不再失效。 | P1 |
 | S6 | mobile-client revocation 权限 | 已完成 | SeedData 新库直配 + 老库 `EnsureClientPermissionsAsync` 幂等补丁（admin_client offline_access 同机制）。 | P1 |
 | S7 | access 寿命 | 已完成 | **定案 10 分钟**（不再改 5）。 | P1 |
@@ -252,12 +252,6 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 - device_id：Admin 生成随机 Guid 存 HttpOnly cookie，附 authorize URL 与 token/refresh 请求。
 - 已知债（另立专项）：state 生成后未校验（登录 CSRF）、回调 JWT 只 Base64 解不验签、`state=="changepwd"` hack。**刷新竞态一项已由单飞锁解决**。标准化为 AddOpenIdConnect 可一并收口，但标准 handler 内部刷新带不了自定义 device_id → 须先决定"放弃 device_id 或子类化 handler"。见 §12.1。
 - 单设备互踢**不影响** Admin（授权码流不经 password/sms 的按 client 吊销路径）。
-
-### 10.2 Sync 服务（sync-client，client_credentials）
-- M2M：`/connect/token` 用 client_credentials + scope=api:sync 取 token（aud=openfindbearings-api），进程级缓存。
-- **缓存策略（v2.12.0 更新）**：按响应 `expires_in` 比例留缓冲——`buffer = max(30s, expiresIn × 20%)`，access 10 分钟 → 缓存约 8 分钟；access 寿命再调整自适应，无需改码（`BusinessApiClient`）。
-- 无 refresh token 交互、无 device_id、无用户上下文。
-- Sync 自身 API 的 ValidAudiences 含 [openfindbearings-sync, openfindbearings-api, api:sync]。
 
 ### 10.3 移动端（mobile-client，password/sms，经 BFF）
 - **Taro 不直连 Identity**，统一经 BFF（OpenFindBearings.Mobile）：

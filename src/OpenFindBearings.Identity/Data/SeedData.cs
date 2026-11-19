@@ -529,22 +529,9 @@ namespace OpenFindBearings.Identity.Data
                 logger.LogInformation("创建客户端 [{ClientId}] 成功", clientId);
             }
 
-            await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
-            {
-                ClientId = "sync-client",
-                ClientSecret = "388D45FA-B36B-4988-BA59-B187D329C207",
-                DisplayName = "同步服务客户端",
-                Permissions =
-                {
-                    Permissions.Endpoints.Token,
-                    Permissions.GrantTypes.ClientCredentials,
-                    Permissions.GrantTypes.RefreshToken,
-                    Permissions.Scopes.Profile,
-                    Permissions.Scopes.Email,
-                    Permissions.Scopes.Roles,
-                    Permissions.Prefixes.Scope + "api:sync"
-                }
-            }, "sync-client", ofbTenantId);
+            // 改动说明（v2.22.0 凭据卫生）：开源版不提供同步服务，删除了此前写死密钥的
+//   sync-client 种子。需要 M2M 同步的服务端由部署方在扩展里自行注册客户端，
+//   密钥从密钥管理系统注入，不得进入源码或公开仓库。
 
             await CreateIfNotExistsAsync(new OpenIddictApplicationDescriptor
             {

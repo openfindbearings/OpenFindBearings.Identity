@@ -22,7 +22,6 @@ OAuth 2.0 / OpenID Connect 认证中心，为所有业务系统提供统一的�
 | 客户端 | 授权方式 | 用途 |
 |--------|----------|------|
 | admin_client | Authorization Code | Admin 管理后台 |
-| sync-client | Client Credentials | Sync ETL 服务 |
 | mobile-client | Password + SMS | 移动端 Taro App |
 | web-client | Authorization Code + PKCE | Web 前端 |
 ## 部署
