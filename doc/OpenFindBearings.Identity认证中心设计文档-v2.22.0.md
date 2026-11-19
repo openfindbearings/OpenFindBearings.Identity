@@ -1,8 +1,8 @@
 # OpenFindBearings.Identity 认证中心设计文档
 
-**版本：** v2.21.1
-**日期：** 2026-11-10
-**状态：** 文档与代码同步（登录锁定提示与失败计数修正）
+**版本：** v2.22.0
+**日期：** 2026-11-19
+**状态：** 文档与代码同步（种子数据加固：环境隔离、逐项幂等、迁移 fail-fast）
 
 ---
 
@@ -11,6 +11,7 @@
 | 版本 | 日期 | 变更说明 |
 |------|------|----------|
 | v2.21.1 | 2026-11-10 | 登录锁定修正：① `RecordFailedLogin` 锁定过期后先清零再计本次失败（原实现锁到期仍保留计数，再错一次即重锁 15 分钟，形成"越试越锁"循环）；② 仍在锁定窗口内不再累计、不续期；③ 密码/短信授权在 `CheckCanLoginAsync` 为 false 时不再记失败（原会给锁定续期）；④ 管理台登录页区分「已删除 / 已禁用 / 临时锁定（含剩余分钟数）」三态提示，替代统一的"账户不可用" |
+| v2.22.0 | 2026-11-19 | **种子数据加固（本地/全新库可直接启动）**：① 迁移从 `SeedData.SeedAsync` 上移到 `Program.cs` 启动块并直接 await，失败即启动失败（原被种子阶段 try/catch 吞掉，残库照常服务）；② 租户按固定 Id、角色按名称、用户按 Id 或「用户名+租户」逐个 ensure，不再"存在任意数据即整体跳过"；③ 五个演示/测试账号（zhangsan/lisi/wangwu/lockeduser/testuser）只在 Development 创建，生产库不再出现已知密码的测试用户；④ 两个管理员账号改为读 `Security:InitialUserPassword` 作为初始密码，与后台首次登录改密口径一致；⑤ 用户-角色关联改为 `IsInRoleAsync` 判重后追加 |
 | v1.0.0 ~ v2.10.0 | 2026-05 ~ 09 | 见历史版本文件（用户/角色/租户隔离/OIDC 端点/SMS grant/设备绑定/客户端命名统一等） |
 | v2.11.0 | 2026-09-08 | 移动端登录与商户入驻设计评审结论纳入；提出 P1 安全完善清单 S1-S9 |
 | v2.12.0 | 2026-09-10 | ① access 寿命定案 10 分钟；② S1-S9 按已实现记录；③ §5.2 受众编辑、§5.3 客户端管理修复按落地情况更新；④ §9 管理端点角色门禁已补齐；⑤ §4 补 OpenIddict 双表合并 + 表名去 Oidc 前缀；⑥ §8 新增 S10 注册用户默认角色 |
@@ -282,7 +283,10 @@ OpenFindBearings.Identity 是全局 OIDC 认证中心，一个进程承载两套
 
 ### 11.1 服务与种子
 - 服务：ClientService/ScopeService/UserService/TenantService/RoleService（新增 Update 重命名）/TokenRevocationService（新增）/SmsCodeService（验证码生成/校验/频控）/TenantResolver/AuditLogService/SystemConfigService。
-- 种子：2 租户、4 角色（SuperAdmin/Admin/User/TestUser）、7 用户、4 客户端、4 Scope，均幂等（CreateIfNotExists + 权限追加补丁）；业务管理员 AuthUserId 固定 GUID（与 API SeedData 桥接一致，改动须同步 API 侧 `ServiceConstants`）。
+- 种子（v2.22.0 加固）：2 租户、4 角色（SuperAdmin/Admin/User/TestUser）、2 个管理员用户（所有环境）+ 5 个演示用户（仅 Development）、4 客户端、3 Scope。
+  - 迁移在 `Program.cs` 启动块执行、失败即启动失败；种子只负责数据，且每类数据逐项判重（租户按固定 Id、角色按名称、管理员按固定 Id、演示用户按「用户名+租户」、角色绑定按 `IsInRoleAsync`）。
+  - 管理员初始密码读 `Security:InitialUserPassword`；业务管理员 AuthUserId 固定 GUID（见 `TenantConstants.BusinessAdminUserId`），API 首登据此分配 Admin 角色。
+  - 全新库启动后即可用 `admin` 登录，不需要任何手工 SQL；重启不产生重复行。ID（与 API SeedData 桥接一致，改动须同步 API 侧 `ServiceConstants`）。
 
 ### 11.2 Program.cs 管道与中间件
 

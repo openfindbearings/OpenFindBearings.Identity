@@ -40,11 +40,11 @@ namespace OpenFindBearings.Identity.Data
                     //await context.Database.EnsureDeletedAsync();
                 }
 
-                await context.Database.MigrateAsync();
-
+                // 改动说明（v2.24.0 种子加固）：迁移已上移到 Program.cs 启动块（失败即抛出），
+                //   种子里再做迁移会被本方法的 try/catch 吞掉，重演"残库照常服务"的事故。
                 await SeedTenantsAsync(context, logger);
                 await SeedRolesAsync(roleManager, logger);
-                await SeedUsersAsync(userManager, logger);
+                await SeedUsersAsync(userManager, logger, isDevelopment, configuration);
                 await SeedUserRolesAsync(userManager, roleManager, logger);
                 await SeedScopesAsync(scopeManager, context, logger);
                 await SeedClientsAsync(appManager, context, configuration, logger);
@@ -61,14 +61,8 @@ namespace OpenFindBearings.Identity.Data
 
         private static async Task SeedTenantsAsync(ApplicationDbContext context, ILogger logger)
         {
-            if (await context.Tenants.AnyAsync())
-            {
-                logger.LogInformation("租户数据已存在，跳过初始化");
-                return;
-            }
-
-            logger.LogInformation("开始初始化租户数据...");
-
+            // 改动说明（v2.24.0 种子加固）：原先"存在任意租户即整体跳过"，部分初始化过的库
+            //   会永久缺少另一个租户；改为按固定 Id 逐个 ensure，缺哪个补哪个。
             var tenants = new[]
             {
                 new Tenant
@@ -89,10 +83,23 @@ namespace OpenFindBearings.Identity.Data
                 }
             };
 
-            context.Tenants.AddRange(tenants);
+            var existingIds = await context.Tenants
+                .Select(t => t.Id)
+                .ToListAsync();
+
+            var missing = tenants
+                .Where(t => !existingIds.Contains(t.Id))
+                .ToList();
+
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            context.Tenants.AddRange(missing);
             await context.SaveChangesAsync();
 
-            logger.LogInformation("租户数据初始化完成，共添加 {Count} 个租户", tenants.Length);
+            logger.LogInformation("租户数据已补全，本次新增 {Count} 个", missing.Count);
         }
 
         #endregion
@@ -101,14 +108,8 @@ namespace OpenFindBearings.Identity.Data
 
         private static async Task SeedRolesAsync(RoleManager<IdentityRole<Guid>> roleManager, ILogger logger)
         {
-            if (await roleManager.Roles.AnyAsync())
-            {
-                logger.LogInformation("角色数据已存在，跳过初始化");
-                return;
-            }
-
-            logger.LogInformation("开始初始化角色数据...");
-
+            // 改动说明（v2.24.0 种子加固）：改为按角色名逐个 ensure，避免"有任意角色即跳过"
+            //   导致部分初始化库缺 Admin/SuperAdmin 而无法授权。
             var roles = new[]
             {
                 new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "SuperAdmin", NormalizedName = "SUPERADMIN" },
@@ -117,46 +118,77 @@ namespace OpenFindBearings.Identity.Data
                 new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "TestUser", NormalizedName = "TESTUSER" }
             };
 
+            var added = 0;
             foreach (var role in roles)
             {
+                if (await roleManager.RoleExistsAsync(role.Name!))
+                {
+                    continue;
+                }
+
                 var result = await roleManager.CreateAsync(role);
                 if (!result.Succeeded)
                 {
                     logger.LogWarning("创建角色失败: {Name}, Errors: {Errors}",
                         role.Name, string.Join(", ", result.Errors.Select(e => e.Description)));
+                    continue;
                 }
+
+                added++;
             }
 
-            logger.LogInformation("角色数据初始化完成，共添加 {Count} 个角色", roles.Length);
+            if (added > 0)
+            {
+                logger.LogInformation("角色数据已补全，本次新增 {Count} 个", added);
+            }
         }
 
         #endregion
 
         #region 用户初始化
 
-        private static async Task SeedUsersAsync(UserManager<OidcUser> userManager, ILogger logger)
+        private static async Task SeedUsersAsync(
+            UserManager<OidcUser> userManager,
+            ILogger logger,
+            bool isDevelopment,
+            IConfiguration configuration)
         {
-            if (await userManager.Users.AnyAsync())
+            // 改动说明（v2.24.0 种子加固）：
+            //   1) 管理员账号在所有环境必须存在（后台登录与业务管理员身份依赖），不再受"有任意用户即跳过"影响；
+            //   2) 五个演示/测试账号只在 Development 创建，生产库不得出现已知密码的测试用户；
+            //   3) 管理员初始密码统一读 Security:InitialUserPassword，与后台"首次登录须改密"的口径一致。
+            var adminPassword = configuration["Security:InitialUserPassword"];
+            if (string.IsNullOrWhiteSpace(adminPassword))
             {
-                logger.LogInformation("用户数据已存在，跳过初始化");
-                return;
+                adminPassword = "Admin@123456";
             }
 
-            logger.LogInformation("开始初始化用户数据...");
-
-            var usersWithPasswords = new[]
+            var usersWithPasswords = new List<(OidcUser User, string Password)>
             {
-                (User: CreateSystemAdminUser(), Password: "Admin@123456"),
-                (User: CreateAdminUser(),        Password: "Admin@123456"),
-                (User: CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"), Password: "User@123456"),
-                (User: CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"), Password: "User@123456"),
-                (User: CreateTestUser("wangwu", "王五", "wangwu@example.com", null), Password: "User@123456"),
-                (User: CreateLockedUser(), Password: "Locked@123456"),
-                (User: CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005"), Password: "Test@123456")
+                (CreateSystemAdminUser(), adminPassword),
+                (CreateAdminUser(), adminPassword)
             };
 
+            if (isDevelopment)
+            {
+                usersWithPasswords.AddRange(new (OidcUser User, string Password)[]
+                {
+                    (CreateTestUser("zhangsan", "张三", "zhangsan@example.com", "+8613800000002"), "User@123456"),
+                    (CreateTestUser("lisi", "李四", "lisi@example.com", "+8613800000003"), "User@123456"),
+                    (CreateTestUser("wangwu", "王五", "wangwu@example.com", null), "User@123456"),
+                    (CreateLockedUser(), "Locked@123456"),
+                    (CreateTestUser("testuser", "测试用户", "test@example.com", "+8613800000005"), "Test@123456")
+                });
+            }
+
+            var added = 0;
             foreach (var (user, password) in usersWithPasswords)
             {
+                if (await IsUserPresentAsync(userManager, user))
+                {
+                    continue;
+                }
+
                 var result = await userManager.CreateAsync(user, password);
 
                 if (!result.Succeeded)
@@ -174,9 +206,29 @@ namespace OpenFindBearings.Identity.Data
                     }
                     await userManager.UpdateAsync(user);
                 }
+
+                added++;
             }
 
-            logger.LogInformation("用户数据初始化完成，共添加 {Count} 个用户", usersWithPasswords.Length);
+            if (added > 0)
+            {
+                logger.LogInformation("用户数据已补全，本次新增 {Count} 个", added);
+            }
+        }
+
+        /// <summary>
+        /// 判断用户是否已存在：固定 Id 的管理员按 Id 判断，测试账号按"用户名 + 租户"判断
+        /// （两个 admin 分属不同租户，用户名相同不能单独作为主键依据）。
+        /// </summary>
+        private static async Task<bool> IsUserPresentAsync(UserManager<OidcUser> userManager, OidcUser user)
+        {
+            if (await userManager.FindByIdAsync(user.Id.ToString()) is not null)
+            {
+                return true;
+            }
+
+            return await userManager.Users.AnyAsync(u =>
+                u.UserName == user.UserName && u.TenantId == user.TenantId);
         }
 
         private static OidcUser CreateSystemAdminUser()
@@ -392,17 +444,17 @@ namespace OpenFindBearings.Identity.Data
 
             if (systemAdmin != null)
             {
-                if (superAdminRole != null)
+                if (superAdminRole != null && !await userManager.IsInRoleAsync(systemAdmin, superAdminRole.Name!))
                     await userManager.AddToRoleAsync(systemAdmin, superAdminRole.Name!);
-                if (adminRole != null)
+                if (adminRole != null && !await userManager.IsInRoleAsync(systemAdmin, adminRole.Name!))
                     await userManager.AddToRoleAsync(systemAdmin, adminRole.Name!);
             }
 
             if (businessAdmin != null)
             {
-                if (superAdminRole != null)
+                if (superAdminRole != null && !await userManager.IsInRoleAsync(businessAdmin, superAdminRole.Name!))
                     await userManager.AddToRoleAsync(businessAdmin, superAdminRole.Name!);
-                if (adminRole != null)
+                if (adminRole != null && !await userManager.IsInRoleAsync(businessAdmin, adminRole.Name!))
                     await userManager.AddToRoleAsync(businessAdmin, adminRole.Name!);
             }
 
@@ -413,12 +465,13 @@ namespace OpenFindBearings.Identity.Data
             {
                 if (!excludeIds.Contains(user.Id) && !excludeUsernames.Contains(user.UserName!) && userRole != null)
                 {
-                    await userManager.AddToRoleAsync(user, userRole.Name!);
+                    if (!await userManager.IsInRoleAsync(user, userRole.Name!))
+                        await userManager.AddToRoleAsync(user, userRole.Name!);
                 }
             }
 
             var testUser = await userManager.FindByNameAsync("testuser");
-            if (testUser != null && testUserRole != null)
+            if (testUser != null && testUserRole != null && !await userManager.IsInRoleAsync(testUser, testUserRole.Name!))
             {
                 await userManager.AddToRoleAsync(testUser, testUserRole.Name!);
             }
