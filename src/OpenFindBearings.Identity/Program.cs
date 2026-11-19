@@ -1,5 +1,6 @@
 using OpenFindBearings.Identity.Data;
 using OpenFindBearings.Identity.Extensions;
+using Microsoft.EntityFrameworkCore;
 using OpenFindBearings.Identity.Helpers;
 using OpenFindBearings.Identity.Middleware;
 using OpenFindBearings.Identity.Services;
@@ -133,16 +134,14 @@ app.MapDefaultControllerRoute().WithStaticAssets();
 // 17. 健康检查
 app.MapAllHealthChecks();
 
-// 18. 执行数据库初始化
+// 18. 数据库迁移与种子数据
+// 改动说明（v2.24.0 种子加固）：迁移从 SeedData 内部上移到启动块并直接 await，
+//   失败即让进程启动失败（K8s 下 CrashLoopBackOff 并告警），不再被种子阶段的
+//   try/catch 吞成一条日志后带着残缺 schema 继续对外服务。
 using var scope = app.Services.CreateScope();
-try
-{
-    await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
-}
-catch (Exception ex)
-{
-    app.Logger.LogError(ex, "数据库初始化失败，服务继续运行，数据库相关功能暂时不可用");
-}
+var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+await dbContext.Database.MigrateAsync();
+await SeedData.SeedAsync(scope.ServiceProvider, app.Logger, app.Environment.IsDevelopment());
 
 // 19. 启动
 app.Run();

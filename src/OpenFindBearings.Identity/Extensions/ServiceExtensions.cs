@@ -356,7 +356,8 @@ namespace OpenFindBearings.Identity.Extensions
             try
             {
                 // 尝试获取一个已知的客户端来验证 OpenIddict 是否正常
-                await _applicationManager.FindByClientIdAsync("sync-client");
+                // 改动说明（v2.22.0）：原用 sync-client 探测，开源版已不再注册该客户端，改用 admin_client
+                await _applicationManager.FindByClientIdAsync("admin_client");
                 _cachedResult = HealthCheckResult.Healthy();
                 _lastCheck = now;
                 return _cachedResult;
