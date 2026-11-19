@@ -6,6 +6,7 @@ using OpenFindBearings.Identity.Middleware;
 using OpenFindBearings.Identity.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Reflection;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +79,50 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 app.Logger.LogInformation("启动 OpenFindBearings Identity");
+
+// ============ 启动自检：手写迁移必须标 [DbContext] ============
+// 改动说明（2026-11-19）：与 API 同款兜底。EF Core 的 MigrationsAssembly 只收集继承链上
+//   带 DbContextAttribute 且 ContextType 等于当前 DbContext 的迁移类型，手写迁移漏标
+//   [DbContext] 会被静默忽略（文件在、库里永远没记录）。这里启动时反射扫一遍并告警，
+//   自检失败只告警不阻断启动（迁移正确性由 EF 自身保证）。
+try
+{
+    var migrationSubclasses = typeof(ApplicationDbContext).Assembly
+        .GetTypes()
+        .Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(Microsoft.EntityFrameworkCore.Migrations.Migration)));
+
+    var missingDbContextAttribute = migrationSubclasses
+        .Where(t => FindDbContextAttribute(t) == null)
+        .Select(t => t.Name)
+        .ToList();
+
+    if (missingDbContextAttribute.Count > 0)
+    {
+        app.Logger.LogWarning(
+            "检测到 {Count} 个迁移类型缺少 [DbContext] 特性，EF 将忽略它们（迁移不会执行）：{Types}",
+            missingDbContextAttribute.Count,
+            string.Join(", ", missingDbContextAttribute));
+    }
+}
+catch (Exception reflectionEx)
+{
+    app.Logger.LogWarning(reflectionEx, "迁移特性自检失败（不影响启动）");
+}
+
+// 沿继承链查找 DbContextAttribute，与 EF Core MigrationsAssembly.GetDbContextType 的判定口径一致
+static Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute? FindDbContextAttribute(Type type)
+{
+    for (var current = type; current != null && current != typeof(object); current = current.BaseType)
+    {
+        var attribute = current.GetCustomAttribute<Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute>(inherit: false);
+        if (attribute != null)
+        {
+            return attribute;
+        }
+    }
+
+    return null;
+}
 
 // 6. 配置错误页面及其他开发环境专有设置
 if (app.Environment.IsDevelopment())
